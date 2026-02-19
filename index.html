@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knight Fintech – AIWA Loan Assessment</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root { --blue: #22368C; --cyan: #31D2F2; --dark: #0F1115; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #F4F6F9; height: 100vh; display: flex; flex-direction: column; overflow: hidden; margin: 0; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(49,210,242,0.25); border-radius: 10px; }
+
+        /* Animations */
+        @keyframes fadeUp   { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes bounce   { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
+        @keyframes pulse-ring { 0%,100%{opacity:1} 50%{opacity:.4} }
+        @keyframes pulse-upload { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+
+        .fade-up   { animation: fadeUp .35s ease forwards; }
+        .dot-bounce { animation: bounce 1.4s infinite ease-in-out both; }
+
+        /* Log */
+        .log-entry { border-left: 2px solid var(--cyan); background: rgba(49,210,242,.03); padding: .65rem .8rem; border-radius: 0 4px 4px 0; }
+
+        /* Offer card */
+        .offer-card { background: linear-gradient(135deg,#22368C 0%,#1a2a70 100%); border-radius: 1rem; padding: 1.25rem; color:#fff; box-shadow: 0 10px 30px rgba(34,54,140,.35); }
+        .offer-row  { display:flex; justify-content:space-between; align-items:center; padding:.55rem 0; border-bottom:1px solid rgba(255,255,255,.08); }
+        .offer-row:last-child { border:none; }
+
+        /* Dropdown */
+        .dropdown-menu { position:absolute; bottom:100%; left:0; right:0; margin-bottom:8px; background:#fff; border:1px solid #E5E7EB; border-radius:.85rem; max-height:320px; overflow-y:auto; z-index:50; box-shadow:0 -10px 20px rgba(0,0,0,.08); }
+        .dd-item { padding:11px 16px; cursor:pointer; font-size:13px; color:#374151; border-bottom:1px solid #F9FAFB; transition:background .15s; }
+        .dd-item:hover { background:#EFF6FF; }
+        .dd-cat  { padding:7px 16px; background:#F9FAFB; font-size:9px; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:.12em; position:sticky; top:0; }
+
+        /* Quick action buttons */
+        .qa-btn { background:#fff; color:var(--blue); border:1.5px solid var(--blue); border-radius:8px; padding:6px 14px; font-size:12px; font-weight:600; cursor:pointer; transition:all .2s; }
+        .qa-btn:hover { background:#EFF6FF; }
+
+        /* Status pill */
+        .pill { background:#EFF6FF; color:var(--blue); border:1px solid #BFDBFE; border-radius:999px; padding:2px 10px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+
+        /* Guardrail */
+        .guardrail-warn  { background:#FEF3C7; border:1px solid #F59E0B; color:#78350F; }
+        .guardrail-block { background:#FEE2E2; border:1px solid #FCA5A5; color:#7F1D1D; }
+
+        /* Upload pulse */
+        .upload-active { animation: pulse-upload 1.8s infinite; color: var(--blue) !important; }
+    </style>
+</head>
+<body>
+
+<!-- ══════════ HEADER ══════════ -->
+<header style="background:#fff;border-bottom:1px solid #E5E7EB;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0;box-shadow:0 1px 5px rgba(0,0,0,.06);z-index:10;">
+    <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;background:var(--blue);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:17px;">K</div>
+        <div>
+            <div style="color:var(--blue);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.04em;">Knight Fintech</div>
+            <div style="color:#9CA3AF;font-size:9px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;">AIWA · Agentic Underwriting Orchestrator</div>
+        </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:999px;padding:4px 12px;">
+        <div id="status-dot" style="width:6px;height:6px;background:var(--cyan);border-radius:50%;animation:pulse-ring 2s infinite;"></div>
+        <span id="status-label" style="color:var(--blue);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">System Active</span>
+    </div>
+</header>
+
+<!-- ══════════ BODY ══════════ -->
+<div style="flex:1;display:flex;overflow:hidden;">
+
+    <!-- CHAT PANEL -->
+    <div style="flex:1;display:flex;flex-direction:column;position:relative;background:#fff;border-right:1px solid #E5E7EB;min-width:0;">
+
+        <!-- Messages -->
+        <div id="chat" style="flex:1;overflow-y:auto;padding:20px 20px 180px;display:flex;flex-direction:column;gap:16px;">
+            <div style="text-align:center;">
+                <span style="font-size:10px;font-weight:700;color:#9CA3AF;background:#F3F4F6;padding:4px 12px;border-radius:999px;text-transform:uppercase;letter-spacing:.12em;">
+                    Unsecured Business Loans · Credit Underwriting
+                </span>
+            </div>
+        </div>
+
+        <!-- Bot typing indicator -->
+        <div id="typing" style="display:none;position:absolute;bottom:148px;left:20px;background:#fff;border:1px solid #E5E7EB;box-shadow:0 4px 15px rgba(0,0,0,.08);padding:10px 14px;border-radius:16px 16px 16px 0;">
+            <div style="display:flex;gap:4px;">
+                <div class="dot-bounce" style="width:7px;height:7px;background:#D1D5DB;border-radius:50%;animation-delay:-0.32s;"></div>
+                <div class="dot-bounce" style="width:7px;height:7px;background:#D1D5DB;border-radius:50%;animation-delay:-0.16s;"></div>
+                <div class="dot-bounce" style="width:7px;height:7px;background:#D1D5DB;border-radius:50%;"></div>
+            </div>
+        </div>
+
+        <!-- Input area -->
+        <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #F3F4F6;padding:10px 16px 14px;">
+
+            <!-- Guardrail banner -->
+            <div id="guardrail-banner" style="display:none;margin-bottom:8px;padding:8px 12px;border-radius:8px;font-size:11.5px;display:none;align-items:center;gap:6px;"></div>
+
+            <!-- Dropdowns + Quick Actions (injected dynamically) -->
+            <div id="ui-extras" style="position:relative;"></div>
+
+            <!-- Main input row -->
+            <div style="display:flex;align-items:center;gap:8px;background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:12px;padding:6px 6px 6px 12px;transition:border-color .2s;" id="input-wrap">
+                <input type="file" id="file-input" style="display:none;" accept=".pdf,.png,.jpg,.jpeg,.xlsx" multiple>
+                <button id="upload-btn" onclick="document.getElementById('file-input').click()" style="padding:6px;color:#9CA3AF;background:none;border:none;cursor:pointer;transition:color .2s;" title="Upload document">
+                    <svg id="upload-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                </button>
+                <input type="text" id="user-input" placeholder="Type your response…"
+                    style="flex:1;background:none;border:none;outline:none;font-size:13.5px;color:#374151;padding:6px 0;font-family:inherit;"
+                    autocomplete="off">
+                <button id="send-btn" onclick="handleSend()" style="padding:8px 10px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;transition:opacity .2s;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>
+            <p style="text-align:center;font-size:9.5px;color:#C4C9D4;margin:6px 0 0;">AIWA is not a financial advisor. All offers are preliminary and subject to underwriter review.</p>
+        </div>
+    </div>
+
+    <!-- SYSTEM LOG PANEL -->
+    <div style="width:340px;background:var(--dark);display:flex;flex-direction:column;flex-shrink:0;">
+        <div style="background:#16191E;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05);display:flex;align-items:center;gap:8px;">
+            <div style="width:20px;height:20px;background:rgba(49,210,242,.1);border-radius:4px;display:flex;align-items:center;justify-content:center;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#31D2F2" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <span class="mono" style="color:#D1D5DB;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;">System Execution Log</span>
+            <div style="margin-left:auto;padding:2px 8px;background:rgba(49,210,242,.1);border:1px solid rgba(49,210,242,.2);border-radius:4px;font-size:8px;color:var(--cyan);font-family:monospace;font-weight:700;">BRE ACTIVE</div>
+        </div>
+        <div id="log" class="mono" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;font-size:9.5px;color:#9CA3AF;">
+            <div style="color:rgba(49,210,242,.4);font-style:italic;">-- Kernel Initialized. AIWA v3.1 --</div>
+            <div style="color:rgba(49,210,242,.4);font-style:italic;">-- BRE Engine Loaded. Guardrails Active. --</div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════
+   BUSINESS RULES ENGINE
+════════════════════════════════════════════ */
+const BRE = {
+    parse(str) {
+        if (!str) return 0;
+        const s = str.toString().toLowerCase().replace(/,/g,'').replace(/₹/g,'').trim();
+        const n = parseFloat(s.replace(/[^0-9.]/g,'')) || 0;
+        if (s.includes('cr')) return n * 100;
+        if (s.match(/la[ck]h?|lakh?\b|\bl\b/)) return n;
+        return n > 10000 ? n / 100000 : n;
+    },
+    industryRisk(ind) {
+        const s = (ind||'').toLowerCase();
+        if (['software','it','tech','telecom','accounting','legal','consult','insurance','education','health','pharma'].some(k=>s.includes(k))) return 'low';
+        if (['real estate','entertainment','construction','mining','petroleum','gambling','crypto'].some(k=>s.includes(k))) return 'high';
+        return 'medium';
+    },
+    compute(ud, hasBank, hasFin) {
+        const reqL  = this.parse(ud.loanAmount) || 25;
+        const revL  = this.parse(ud.revenue)    || 50;
+        const isGST = ud.isGSTRegistered;
+        const pur   = (ud.loanPurpose || '').toLowerCase();
+        const vintage = parseFloat(ud.vintage) || 3;
+
+        let eligL = revL * (isGST ? 0.30 : 0.20);
+        if (hasBank) eligL *= 1.20;
+        if (hasFin)  eligL *= 1.15;
+        eligL = Math.round(Math.min(Math.max(eligL,1),200)*100)/100;
+        const appL = Math.min(reqL, eligL);
+
+        let rate = 13.0;
+        const risk = this.industryRisk(ud.industry);
+        if (risk==='low')  rate -= 0.50;
+        if (risk==='high') rate += 1.00;
+        if (vintage < 2) rate += 1.0; else if (vintage > 5) rate -= 0.5;
+        const ltr = appL / revL;
+        if (ltr < 0.10) rate -= 0.5; else if (ltr > 0.25) rate += 0.5;
+        if (hasBank) rate -= 0.25;
+        if (hasFin)  rate -= 0.25;
+        rate = Math.round(Math.max(10,Math.min(22,rate))*4)/4;
+
+        let tenure = 12, fType = 'Revolving Working Capital';
+        if (pur.includes('expansion')||pur.includes('equipment')||pur.includes('machinery')) { tenure=36; fType='Term Loan'; }
+        else if (pur.includes('debt')||pur.includes('refinanc'))  { tenure=24; fType='Term Loan'; }
+        else if (pur.includes('inventory'))                       { tenure=18; fType='Term Loan'; }
+
+        const P  = appL * 1e5;
+        const mr = rate / 100 / 12;
+        const emi = fType==='Revolving Working Capital'
+            ? Math.round(P * mr)
+            : Math.round(P * mr * Math.pow(1+mr,tenure) / (Math.pow(1+mr,tenure)-1));
+        const totalInt = Math.max(0, emi*tenure - (fType==='Revolving Working Capital' ? 0 : P));
+
+        const fmt = l => l>=100 ? `₹${(l/100).toFixed(2)} Cr` : `₹${l.toFixed(2)} L`;
+        return {
+            approvedAmt: fmt(appL), eligibleAmt: fmt(eligL),
+            rate: rate.toFixed(2), tenure, fType,
+            emiFormatted: `₹${emi.toLocaleString('en-IN')}`,
+            totalIntFmt:  `₹${Math.round(totalInt).toLocaleString('en-IN')}`,
+            procFee: `₹${Math.round(appL*1e3*0.02).toLocaleString('en-IN')} + GST`,
+            risk, isGST, hasBank, hasFin
+        };
+    }
+};
+
+/* ════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════ */
+let state = {
+    apiHistory: [],
+    userData:   {},
+    hasBank: false,
+    hasFin:  false,
+    offerShown: false,
+    inputType:  'text',
+    isLoading:  false,
+    done: false,
+    uploadTarget: null
+};
+
+const LOAN_PURPOSES = [
+    'Working Capital / Cash Flow Management',
+    'Business Expansion / Scale-Up',
+    'Inventory / Stock Purchase',
+    'Machinery / Equipment Purchase',
+    'Debt Consolidation / Refinancing'
+];
+
+const INDUSTRY_DATA = [
+    { cat: 'Agri, Fishing & Mining', items: ['Production of crops and animals','Forestry and logging','Fishing and aquaculture','Mining of Coal and lignite','Mining of Metal Ores','Other Mining & Quarrying'] },
+    { cat: 'Manufacturing', items: ['Food, beverages and tobacco','Textile, leather and apparel','Chemicals, Pharma and Botanical','Metal and metal products','Plastic, rubber and fabricated metal','Computer and electronic equipment','Electrical and Transport equipment','Motor vehicles and trailers','Other manufacturing'] },
+    { cat: 'Utilities & Construction', items: ['Electric power generation','Water collection and supply','Buildings Construction','Roads and railways construction','Specialized construction'] },
+    { cat: 'Trading & Transport', items: ['Wholesale Trading','Retail Trading','Land Transport (Road, Rail)','Warehousing and storage','Postal & Courier activities'] },
+    { cat: 'Services & Tech', items: ['Accommodation and Food services','Publishing and Software systems','Telecommunication and Data hosting','Banking and Financial services','Insurance and Pension activities','Real estate activities','Legal, Accounting and Consultancy','Scientific R&D and Advertising','Education and Health services','Creative, Arts and Entertainment'] },
+];
+
+/* ════════════════════════════════════════════
+   DOM HELPERS
+════════════════════════════════════════════ */
+const chat  = () => document.getElementById('chat');
+const log   = () => document.getElementById('log');
+const inp   = () => document.getElementById('user-input');
+const send  = () => document.getElementById('send-btn');
+const esc   = s  => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function scrollChat()  { const c=chat(); c.scrollTop=c.scrollHeight; }
+function scrollLog()   { const l=log();  l.scrollTop=l.scrollHeight;  }
+function showTyping(v) { document.getElementById('typing').style.display = v ? 'block' : 'none'; scrollChat(); }
+
+function setInput(enabled) {
+    inp().disabled  = !enabled;
+    send().disabled = !enabled;
+    send().style.opacity = enabled ? '1' : '0.4';
+}
+
+function addBotMessage(html) {
+    const d = document.createElement('div');
+    d.className = 'fade-up';
+    d.style.cssText = 'display:flex;gap:10px;align-items:flex-start;';
+    d.innerHTML = `
+        <div style="width:32px;height:32px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:900;flex-shrink:0;">AI</div>
+        <div style="background:#fff;border:1px solid #E5E7EB;padding:12px 16px;border-radius:0 16px 16px 16px;font-size:13.5px;color:#374151;max-width:82%;line-height:1.65;box-shadow:0 1px 4px rgba(0,0,0,.05);white-space:pre-line;">${html}</div>`;
+    chat().appendChild(d);
+    scrollChat();
+}
+
+function addUserMessage(text) {
+    const d = document.createElement('div');
+    d.className = 'fade-up';
+    d.style.cssText = 'display:flex;justify-content:flex-end;';
+    d.innerHTML = `<div style="background:var(--blue);color:#fff;padding:10px 18px;border-radius:16px 0 16px 16px;font-size:13.5px;font-weight:500;max-width:78%;">${esc(text)}</div>`;
+    chat().appendChild(d);
+    scrollChat();
+}
+
+function addLog(text, status) {
+    const d = document.createElement('div');
+    d.className = 'log-entry fade-up';
+    d.innerHTML = `
+        <div style="color:var(--cyan);font-size:9px;margin-bottom:3px;">[${new Date().toLocaleTimeString()}] AGENT_EXEC</div>
+        <div style="color:rgba(255,255,255,.85);font-size:9.5px;white-space:pre-line;line-height:1.6;">${esc(text)}</div>
+        ${status ? `<div style="color:#6B7280;font-size:8px;margin-top:3px;text-transform:uppercase;">STATUS: ${esc(status)}</div>` : ''}`;
+    log().appendChild(d);
+    scrollLog();
+}
+
+function showGuardrail(flag) {
+    const b = document.getElementById('guardrail-banner');
+    if (!flag) { b.style.display='none'; return; }
+    b.className = flag.type==='block' ? 'guardrail-block' : 'guardrail-warn';
+    b.style.cssText += ';display:flex;margin-bottom:8px;padding:8px 12px;border-radius:8px;font-size:11.5px;align-items:center;gap:6px;';
+    b.innerHTML = `<span>${flag.type==='block'?'🚫':'⚠️'}</span><span>${esc(flag.message)}</span>`;
+    if (flag.type !== 'block') setTimeout(() => b.style.display='none', 7000);
+}
+
+/* ════════════════════════════════════════════
+   OFFER CARD
+════════════════════════════════════════════ */
+function appendOfferCard(o) {
+    const d = document.createElement('div');
+    d.className = 'fade-up';
+    d.innerHTML = `
+        <div class="offer-card">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#31D2F2" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                <span style="font-size:9px;font-weight:700;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.14em;">Preliminary Loan Offer</span>
+            </div>
+            ${[['Approved Limit',o.approvedAmt,true],['Facility Type',o.fType,false],['Interest Rate',o.rate+'% per annum',false],['Tenure',o.tenure+' months',false],['Processing Fee',o.procFee,false]].map(([l,v,b])=>`
+            <div class="offer-row">
+                <span style="font-size:11px;color:rgba(255,255,255,.55);">${l}</span>
+                <span style="font-size:${b?'15':'12'}px;font-weight:${b?700:500};color:${b?'#fff':'rgba(255,255,255,.9)'};">${v}</span>
+            </div>`).join('')}
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.15);text-align:center;">
+                <div style="font-size:10px;color:rgba(255,255,255,.5);margin-bottom:4px;">Monthly EMI / Interest Outflow</div>
+                <div style="font-size:26px;font-weight:700;color:#31D2F2;letter-spacing:-.02em;">${o.emiFormatted}</div>
+                <div style="font-size:9.5px;color:rgba(255,255,255,.35);margin-top:4px;">Total Interest: ${o.totalIntFmt}</div>
+            </div>
+            <div style="display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap;">
+                ${o.isGST  ? '<span class="pill">✓ GST Verified</span>':''} 
+                ${o.hasBank? '<span class="pill">✓ Bank Stmt</span>'  :''}
+                ${o.hasFin ? '<span class="pill">✓ Financials</span>' :''}
+            </div>
+        </div>
+        <p style="font-size:9.5px;color:#9CA3AF;margin:6px 0 0 4px;">*Indicative offer. Subject to formal credit underwriting and documentation.</p>`;
+    chat().appendChild(d);
+    scrollChat();
+}
+
+/* ════════════════════════════════════════════
+   SUMMARY CARD
+════════════════════════════════════════════ */
+function appendSummaryCard(fields) {
+    const d = document.createElement('div');
+    d.className = 'fade-up';
+    d.style.cssText = 'background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;overflow:hidden;margin-top:8px;';
+    d.innerHTML = `
+        <div style="padding:8px 14px;background:#F3F4F6;font-size:9px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.12em;">Application Summary</div>
+        ${fields.map((f,i)=>`
+            <div style="display:flex;justify-content:space-between;padding:9px 14px;${i>0?'border-top:1px solid #F3F4F6':''}">
+                <span style="font-size:11px;color:#9CA3AF;">${esc(f.label)}</span>
+                <span style="font-size:11px;font-weight:600;color:#1F2937;">${esc(f.value||'—')}</span>
+            </div>`).join('')}`;
+    chat().appendChild(d);
+    scrollChat();
+}
+
+/* ════════════════════════════════════════════
+   DYNAMIC UI ELEMENTS
+════════════════════════════════════════════ */
+function clearExtras() {
+    document.getElementById('ui-extras').innerHTML = '';
+}
+
+function showPurposeDropdown() {
+    clearExtras();
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;';
+    const dd = document.createElement('div');
+    dd.className = 'dropdown-menu';
+    LOAN_PURPOSES.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'dd-item';
+        item.textContent = p;
+        item.onclick = () => { clearExtras(); handleSubmit(p); };
+        dd.appendChild(item);
+    });
+    wrap.appendChild(dd);
+    document.getElementById('ui-extras').appendChild(wrap);
+}
+
+function showIndustryDropdown() {
+    clearExtras();
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;';
+    const dd = document.createElement('div');
+    dd.className = 'dropdown-menu';
+    INDUSTRY_DATA.forEach(cat => {
+        const hd = document.createElement('div');
+        hd.className = 'dd-cat';
+        hd.textContent = cat.cat;
+        dd.appendChild(hd);
+        cat.items.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'dd-item';
+            row.style.paddingLeft = '22px';
+            row.textContent = item;
+            row.onclick = () => { clearExtras(); handleSubmit(item); };
+            dd.appendChild(row);
+        });
+    });
+    wrap.appendChild(dd);
+    document.getElementById('ui-extras').appendChild(wrap);
+}
+
+function showQuickActions(options) {
+    clearExtras();
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-bottom:8px;';
+    options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'qa-btn';
+        btn.textContent = opt;
+        btn.onclick = () => { clearExtras(); handleSubmit(opt); };
+        wrap.appendChild(btn);
+    });
+    document.getElementById('ui-extras').appendChild(wrap);
+}
+
+/* ════════════════════════════════════════════
+   API CALL → Flask Backend
+════════════════════════════════════════════ */
+async function callBackend(userMessage) {
+    if (userMessage) state.apiHistory.push({ role: 'user', content: userMessage });
+
+    const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            messages: state.apiHistory,
+            userData: state.userData,
+            hasBank:  state.hasBank,
+            hasFin:   state.hasFin
+        })
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+    }
+
+    const parsed = await res.json();
+    state.apiHistory.push({ role: 'assistant', content: JSON.stringify(parsed) });
+    return parsed;
+}
+
+/* ════════════════════════════════════════════
+   PROCESS RESPONSE
+════════════════════════════════════════════ */
+function processResponse(r) {
+    // Merge data
+    if (r.dataExtracted) Object.assign(state.userData, r.dataExtracted);
+
+    // Guardrail
+    showGuardrail(r.guardrailFlag || null);
+    if (r.guardrailFlag?.type === 'block') {
+        state.done = true;
+        addLog('GUARDRAIL_ENGINE: Application blocked.', 'BLOCKED');
+    }
+
+    // Log
+    if (r.logEntry) addLog(r.logEntry, r.logStatus);
+
+    // Bot message
+    if (r.message) addBotMessage(r.message);
+
+    // Summary card
+    if (r.isSummary && r.summaryData) appendSummaryCard(r.summaryData);
+
+    const it = r.inputType || 'text';
+    state.inputType = it;
+
+    // Offer computation
+    const needsOffer = (it === 'accept_offer' || (r.message||'').toLowerCase().includes('offer')) && !state.offerShown;
+    if (needsOffer) {
+        const o = BRE.compute(state.userData, state.hasBank, state.hasFin);
+        state.offerShown = true;
+        addLog(`BRE_ENGINE: Offer computed.\n> ${o.approvedAmt} @ ${o.rate}% | ${o.tenure}m | EMI ${o.emiFormatted}\n> Risk tier: ${o.risk.toUpperCase()}`, 'OFFER READY');
+        appendOfferCard(o);
+    }
+
+    // Configure input
+    inp().placeholder = 'Type your response…';
+    inp().disabled    = false;
+    setInput(true);
+    clearExtras();
+    document.getElementById('upload-icon').classList.remove('upload-active');
+
+    switch (it) {
+        case 'dropdown_purpose':
+            inp().disabled = true;
+            setInput(false);
+            setTimeout(showPurposeDropdown, 100);
+            break;
+        case 'dropdown_industry':
+            inp().disabled = true;
+            setInput(false);
+            setTimeout(showIndustryDropdown, 100);
+            break;
+        case 'upload_bank':
+            inp().placeholder = "Click '+' to upload bank statements, or type to skip…";
+            document.getElementById('file-input').setAttribute('data-type','bank');
+            document.getElementById('upload-icon').classList.add('upload-active');
+            showQuickActions(['Skip for now']);
+            break;
+        case 'upload_fin':
+            inp().placeholder = "Click '+' to upload financials, or type to skip…";
+            document.getElementById('file-input').setAttribute('data-type','fin');
+            document.getElementById('upload-icon').classList.add('upload-active');
+            showQuickActions(['Skip for now']);
+            break;
+        case 'accept_offer':
+            showQuickActions(['Yes, I accept the offer', 'I have questions', 'Request a different amount']);
+            break;
+        case 'confirm_summary':
+            showQuickActions(['Yes, all details are correct', 'I need to make a correction']);
+            break;
+        case 'end':
+            state.done = true;
+            inp().placeholder = 'Application submitted. Thank you!';
+            setInput(false);
+            document.getElementById('status-label').textContent = 'Application Complete';
+            document.getElementById('status-dot').style.background = '#10B981';
+            addLog('WORKFLOW_EXIT: Dispatching to RM queue.\n> Notification sent to sales team via Slack.', 'LEAD EXPORTED');
+            break;
+        default:
+            inp().focus();
+    }
+}
+
+/* ════════════════════════════════════════════
+   SUBMIT HANDLER
+════════════════════════════════════════════ */
+async function handleSubmit(overrideText) {
+    const msg = overrideText || inp().value.trim();
+    if (!msg || state.isLoading || state.done) return;
+
+    inp().value = '';
+    clearExtras();
+    showGuardrail(null);
+    setInput(false);
+    addUserMessage(msg);
+
+    // Quick local capture
+    if (/^[6-9]\d{9}$/.test(msg))                                     state.userData.mobile = msg;
+    if (/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i.test(msg))    state.userData.gstn = msg.toUpperCase();
+    if (/^[A-Z]{5}[0-9]{4}[A-Z]$/i.test(msg))                        state.userData.pan  = msg.toUpperCase();
+
+    // Upload parsing
+    if (msg.startsWith('Uploaded:')) {
+        const t = document.getElementById('file-input').getAttribute('data-type');
+        if (t === 'bank') state.hasBank = true;
+        if (t === 'fin')  state.hasFin  = true;
+    }
+
+    state.isLoading = true;
+    showTyping(true);
+
+    try {
+        const r = await callBackend(msg);
+        showTyping(false);
+        processResponse(r);
+    } catch(e) {
+        showTyping(false);
+        addBotMessage('⚠️ ' + esc(e.message) + ' — please try again.');
+        addLog('ERROR: ' + e.message, 'ERROR');
+        setInput(true);
+    } finally {
+        state.isLoading = false;
+    }
+}
+
+/* ════════════════════════════════════════════
+   FILE UPLOAD
+════════════════════════════════════════════ */
+document.getElementById('file-input').addEventListener('change', function(e) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const names = Array.from(files).map(f=>f.name).join(', ');
+    addLog(`DOC_AGENT: Files received.\n> ${names}\n> Initiating extraction pipeline…`, 'PARSING');
+    handleSubmit(`Uploaded: ${names}`);
+    this.value = '';
+});
+
+/* Enter key */
+document.getElementById('user-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleSubmit();
+});
+
+/* ════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════ */
+async function init() {
+    setInput(false);
+    showTyping(true);
+    state.isLoading = true;
+    try {
+        const r = await callBackend(null);
+        showTyping(false);
+        processResponse(r);
+    } catch(e) {
+        showTyping(false);
+        addBotMessage("Hello! I'm AIWA, your AI-powered credit assessment agent for Knight Fintech. Are you looking to apply for an unsecured business loan today?");
+        addLog('AIWA_KERNEL: Fallback mode. Backend unreachable.', 'WARN');
+        setInput(true);
+    } finally {
+        state.isLoading = false;
+    }
+}
+
+window.onload = init;
+</script>
+</body>
+</html>
