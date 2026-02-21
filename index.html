@@ -417,33 +417,41 @@ function showQuickActions(options) {
    API CALL → Flask Backend
 ════════════════════════════════════════════ */
 async function callBackend(userMessage) {
-    if (userMessage) state.apiHistory.push({ role: 'user', content: userMessage });
 
+    if (userMessage)
+        state.apiHistory.push({ role: 'user', content: userMessage });
+
+    // Attach persona BEFORE API call
+    state.userData._persona =
+        document.getElementById('persona-select').value;
+
+    // Fake orchestration delay
     await new Promise(r => setTimeout(r, 400 + Math.random()*400));
+
     const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        state.userData._persona =
-            document.getElementById('persona-select').value;
-
         body: JSON.stringify({
             messages: state.apiHistory,
             userData: state.userData,
-            hasBank:  state.hasBank,
-            hasFin:   state.hasFin
+            hasBank: state.hasBank,
+            hasFin: state.hasFin
         })
     });
 
     if (!res.ok) {
         const err = await res.json().catch(()=>({}));
-        throw new Error(err.error || `Server error ${res.status}`);
+        throw new Error(err.error || Server error ${res.status});
     }
 
     const parsed = await res.json();
-    state.apiHistory.push({ role: 'assistant', content: JSON.stringify(parsed) });
+    state.apiHistory.push({
+        role: 'assistant',
+        content: JSON.stringify(parsed)
+    });
+
     return parsed;
 }
-
 /* ════════════════════════════════════════════
    PROCESS RESPONSE
 ════════════════════════════════════════════ */
