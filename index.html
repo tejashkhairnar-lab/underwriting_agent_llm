@@ -441,7 +441,7 @@ async function callBackend(userMessage) {
 
     if (!res.ok) {
         const err = await res.json().catch(()=>({}));
-        throw new Error(err.error || Server error ${res.status});
+        throw new Error(err.error || `Server error ${res.status}`);
     }
 
     const parsed = await res.json();
