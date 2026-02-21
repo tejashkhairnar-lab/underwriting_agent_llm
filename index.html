@@ -69,6 +69,12 @@
         <div id="status-dot" style="width:6px;height:6px;background:var(--cyan);border-radius:50%;animation:pulse-ring 2s infinite;"></div>
         <span id="status-label" style="color:var(--blue);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">System Active</span>
     </div>
+    <select id="persona-select"
+ style="font-size:10px;border:1px solid #E5E7EB;border-radius:6px;padding:4px;">
+  <option value="growth_sme">Growth SME</option>
+  <option value="stressed_trader">Stressed Trader</option>
+  <option value="new_age_startup">New Age Startup</option>
+</select>
 </header>
 
 <!-- ══════════ BODY ══════════ -->
@@ -416,6 +422,9 @@ async function callBackend(userMessage) {
     const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        state.userData._persona =
+            document.getElementById('persona-select').value;
+
         body: JSON.stringify({
             messages: state.apiHistory,
             userData: state.userData,
