@@ -38,6 +38,54 @@ ANTHROPIC_URL     = "https://api.anthropic.com/v1/messages"
 MODEL             = "claude-sonnet-4-20250514"
 MAX_HISTORY_MSGS  = 6   # Only send last N messages to save tokens
 
+# ═══════════════════════════════════════
+# DEMO PERSONAS (Synthetic Data Engine)
+# ═══════════════════════════════════════
+
+PERSONAS = {
+
+    "growth_sme": {
+        "bureauScore": 742,
+        "peerPercentile": 78,
+        "industryRisk": "low",
+        "gstCompliance": "strong",
+        "avgBankBalance": 18.5,
+        "bounceRate": 0.01,
+        "profitMargin": 14.2,
+        "sectorBenchmark": {
+            "revenueGrowth": 22,
+            "profitMarginMedian": 11
+        }
+    },
+
+    "stressed_trader": {
+        "bureauScore": 612,
+        "peerPercentile": 34,
+        "industryRisk": "medium",
+        "gstCompliance": "average",
+        "avgBankBalance": 4.2,
+        "bounceRate": 0.11,
+        "profitMargin": 5.1,
+        "sectorBenchmark": {
+            "revenueGrowth": 8,
+            "profitMarginMedian": 9
+        }
+    },
+
+    "new_age_startup": {
+        "bureauScore": 705,
+        "peerPercentile": 65,
+        "industryRisk": "high",
+        "gstCompliance": "limited",
+        "avgBankBalance": 9.5,
+        "bounceRate": 0.03,
+        "profitMargin": -2,
+        "sectorBenchmark": {
+            "revenueGrowth": 40,
+            "profitMarginMedian": 4
+        }
+    }
+}
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  GUARDRAILS CONFIG
@@ -625,6 +673,13 @@ def chat():
         parsed = OutputGuardrail.ensure_structure(parsed)
         parsed["currentNode"] = current_node
         parsed = OutputGuardrail.sanitize(parsed)
+        simulated = run_persona_agents(
+            current_node,
+            persona_data,
+            user_data
+        )
+
+        parsed["dataExtracted"].update(simulated)
 
         # ── System analyzer ──
         triggers = SystemAnalyzer.analyze_and_trigger(
