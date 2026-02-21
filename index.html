@@ -419,6 +419,7 @@ function showQuickActions(options) {
 async function callBackend(userMessage) {
     if (userMessage) state.apiHistory.push({ role: 'user', content: userMessage });
 
+    await new Promise(r => setTimeout(r, 400 + Math.random()*400));
     const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -450,6 +451,29 @@ function processResponse(r) {
     // Merge data
     if (r.dataExtracted) Object.assign(state.userData, r.dataExtracted);
 
+    try {
+        // Only run BRE once we have minimal financial data
+        if (state.userData.revenue || state.userData.loanAmount) {
+    
+            const interimOffer = BRE.compute(
+                state.userData,
+                state.hasBank,
+                state.hasFin
+            );
+    
+            addLog(
+    `BRE_ENGINE:
+    Eligibility recalculated
+    > Eligible Limit: ${interimOffer.approvedAmt}
+    > Indicative Rate: ${interimOffer.rate}%
+    > Risk Tier: ${interimOffer.risk.toUpperCase()}`,
+                "MODEL UPDATE"
+            );
+        }
+    } catch (e) {
+        console.warn("BRE interim compute skipped:", e);
+    }
+    
     // Guardrail
     showGuardrail(r.guardrailFlag || null);
     if (r.guardrailFlag?.type === 'block') {
