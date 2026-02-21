@@ -419,7 +419,38 @@ class SystemAnalyzer:
 
         return triggers
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  PERSONA SIMULATION ENGINE (DEMO ONLY)
+# ══════════════════════════════════════════════════════════════════════════════
 
+def run_persona_agents(node, persona_data, user_data):
+    """
+    Simulates backend underwriting agents using demo personas.
+    Executes on EVERY reply just like production APIs.
+    """
+
+    simulated = {}
+
+    # Bureau simulation
+    if node == "NODE_ONBOARD":
+        simulated["bureauScore"] = persona_data.get("bureauScore")
+
+    # Industry peer comparison
+    elif node == "NODE_GST_INDUSTRY":
+        simulated["peerPercentile"] = persona_data.get("peerPercentile")
+        simulated["industryRisk"] = persona_data.get("industryRisk")
+
+    # Financial benchmarking
+    elif node == "NODE_FINANCIALS":
+        simulated["sectorBenchmark"] = persona_data.get("sectorBenchmark")
+        simulated["profitMargin"] = persona_data.get("profitMargin")
+
+    # Bank statement analytics
+    elif node == "NODE_DOCUMENTS":
+        simulated["avgBankBalance"] = persona_data.get("avgBankBalance")
+        simulated["bounceRate"] = persona_data.get("bounceRate")
+
+    return simulated
 # ══════════════════════════════════════════════════════════════════════════════
 #  OUTPUT GUARDRAILS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -590,7 +621,6 @@ def trim_messages(messages, max_msgs=MAX_HISTORY_MSGS):
 def index():
     return send_from_directory(".", "index.html")
 
-
 @app.route("/api/chat", methods=["POST"])
 def chat():
     try:
@@ -600,10 +630,26 @@ def chat():
         has_bank  = body.get("hasBank", False)
         has_fin   = body.get("hasFin", False)
 
+        # ─────────────────────────────────────────
+        # DEMO PERSONA ATTACHMENT (ADD THIS BLOCK)
+        # ─────────────────────────────────────────
+        persona_key = user_data.get("_persona", "growth_sme")
+
+        # fallback safety
+        if persona_key not in PERSONAS:
+            persona_key = "growth_sme"
+
+        persona_data = PERSONAS[persona_key]
+
+        logger.info(f"PERSONA ACTIVE: {persona_key}")
+        # ─────────────────────────────────────────
+
         # ── Determine current node ──
         current_node = NodeRouter.determine_node(user_data, len(messages))
-        logger.info(f"NODE: {current_node} | keys: {[k for k in user_data if not k.startswith('_')]}")
-
+        logger.info(
+            f"NODE: {current_node} | keys: {[k for k in user_data if not k.startswith('_')]}"
+        )
+        
         # ── Last user message ──
         last_msg = ""
         if messages and messages[-1].get("role") == "user":
@@ -673,6 +719,16 @@ def chat():
         parsed = OutputGuardrail.ensure_structure(parsed)
         parsed["currentNode"] = current_node
         parsed = OutputGuardrail.sanitize(parsed)
+
+        simulated = run_persona_agents(
+            current_node,
+            persona_data,
+            user_data
+        )
+        # Merge simulated agent outputs into extracted data
+        parsed.setdefault("dataExtracted", {})
+        parsed["dataExtracted"].update(simulated)
+        
         simulated = run_persona_agents(
             current_node,
             persona_data,
