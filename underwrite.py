@@ -477,7 +477,7 @@ def trigger_models(node, user_data):
     logs = []
 
     # ───────────────── GST DISCOVERY ─────────────────
-    if node == "NODE_GST_DISCOVERY":
+    if node == "NODE_GST_ENTITY":
         updates.update({
             "pan": "ABCDE1234F",
             "gstDiscoveryComplete": True
@@ -492,7 +492,7 @@ def trigger_models(node, user_data):
         ]
 
     # ───────────────── INDUSTRY CONFIRM ─────────────────
-    elif node == "NODE_INDUSTRY_CONFIRM":
+    elif node == "NODE_GST_INDUSTRY":
         updates["peerPrepared"] = True
         updates["industryConfirmed"] = True
 
@@ -502,7 +502,7 @@ def trigger_models(node, user_data):
         ))
 
     # ───────────────── FINANCIAL HEALTH ─────────────────
-    elif node == "NODE_FINANCIAL_HEALTH":
+    elif node == "NODE_FINANCIALS":
         pbid = float(user_data.get("pbid", 20))
         emi  = float(user_data.get("monthlyObligation", 5))
 
@@ -518,7 +518,7 @@ def trigger_models(node, user_data):
         ))
 
     # ───────────────── LOAN STRUCTURING ─────────────────
-    elif node == "NODE_LOAN_STRUCTURING":
+    elif node == "NODE_FINANCIALS":
         updates["loanStructured"] = True
 
         logs.append((
@@ -527,7 +527,7 @@ def trigger_models(node, user_data):
         ))
 
     # ───────────────── PRE-OFFER ─────────────────
-    elif node == "NODE_PRE_OFFER":
+    elif node == "NODE_GST_PRELIM_OFFER":
         updates["preOfferGenerated"] = True
 
         logs.append((
@@ -827,6 +827,7 @@ def chat():
         )
         
         parsed["dataExtracted"].update(simulated)
+        return safe_process(current_node, parsed, user_data)
         
         return safe_process(current_node, parsed, user_data, persona_logs)
 
