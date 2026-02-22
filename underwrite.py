@@ -518,7 +518,8 @@ def trigger_models(node, user_data):
         ))
 
     # ───────────────── LOAN STRUCTURING ─────────────────
-    elif node == "NODE_FINANCIALS":
+    #elif node == "NODE_FINANCIALS":
+    if node == "NODE_FINANCIALS" and not user_data.get("loanStructured"):
         updates["loanStructured"] = True
 
         logs.append((
