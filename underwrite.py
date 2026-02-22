@@ -182,12 +182,41 @@ Follow this sequence (one step per response):
 3. If mobile given but no OTP: "Thank you. I've sent a one-time verification code (OTP) to this number." Wait for OTP. Extract: otpVerified=true
 4. If OTP done: "Are you a GST-registered business?" Extract: isGSTRegistered (boolean)""",
 
-    "NODE_GST_ENTITY": """CURRENT NODE: NODE_GST_ENTITY (GST path)
-Follow this sequence:
-G1. If no GSTN: "Please share your active primary GST number associated with your core business." Extract: gstn
-G2. If GSTN given but name not confirmed: "Fetched details for '[business name]'. Is this correct?" Extract: legalNameConfirmed=true, legalName
-G3. If name confirmed but no CIN: "Being an MCA-registered business, could you please provide your CIN?" If user says not MCA registered, extract cinSkipped=true. Else extract: cin""",
+  "NODE_GST_ENTITY": """CURRENT NODE: NODE_GST_ENTITY (GST Business Discovery)
 
+Sequence:
+
+G1. If no GSTN:
+"Please share your primary GST number linked to the business."
+Extract: gstn
+
+G2. After GSTN:
+"While we fetch your GST and bureau details, please confirm the complete legal business name."
+Extract: businessName
+
+G3. If no Udyam asked:
+"Do you have a Udyam registration number? If yes, please share it. Otherwise type No."
+Extract: udyam
+
+G4. If industry missing:
+"Please select your industry category."
+Set inputType:"dropdown_industry"
+Extract: industry
+
+G5. If LOB missing:
+"Please select line of business."
+Options: Trading, Services, Manufacturing, Financial Services, Infra
+Extract: lineOfBusiness
+
+G6. CIN CONDITION:
+IF businessName contains keywords:
+['private limited','pvt ltd','limited','ltd','llp']
+THEN ask:
+"Since this appears to be an MCA registered entity, please share your CIN."
+Extract: cin
+ELSE:
+Extract cinSkipped=true
+""",
     "NODE_GST_APPLICANT": """CURRENT NODE: NODE_GST_APPLICANT (GST path - Applicant Identity)
 THIS IS CRITICAL. You MUST collect applicant details.
 G4. If no applicant name: "Great. While I build your business's primary profile, I'll need a few details about you, as the applicant. Please enter your full name (as per official records)." Extract: applicantName
@@ -197,26 +226,45 @@ G5. If name given but no DIN/role: "Please enter your DIN, if you are an active 
 G6. Confirm industry and vintage: "This is great progress, [Name]. I have your line of business as [industry] and broad industry as [sub-industry], operating since [year]. Does that sound right?"
 If confirmed: Extract industryConfirmed=true, industry, vintage""",
 
-    "NODE_NONGST_COLLECT": """CURRENT NODE: NODE_NONGST_COLLECT (Non-GST path)
-N1. If no PAN: "Understood. Please enter the PAN for this entity." Extract: pan
-N2. If PAN given but no Udyam: "Great. I have your name as '[name from PAN]'. If you have Udyam registration, please enter the same or enter No." Extract: legalName, udyam (or udyamSkipped=true)
-N3. If Udyam done but no industry: "Please select your broad industry category." Set inputType:"dropdown_industry". Extract: industry
-N4. If industry selected but no applicant name: "I'll need a few details about the person applying for this loan. Please enter the full name of the applicant (as per official records)." Extract: applicantName
-N5. If name given but no designation: "What is your designation or role in this business? (e.g., Proprietor, Partner, Authorised Signatory)" Extract: designation""",
+    "NODE_NONGST_COLLECT":"NODE_NONGST_COLLECT": """CURRENT NODE: NODE_NONGST_COLLECT
 
-    "NODE_FINANCIALS": """CURRENT NODE: NODE_FINANCIALS
-GST path order: revenue first, then loan amount.
-Non-GST path order: loan amount first, then revenue.
+N1. Ask PAN
+Extract: pan
 
-F1. Ask for the FIRST missing item based on path:
-  - GST and no revenue: "Can you help with your revenue from operations in latest financial year? Do mention in lakh or cr."
-  - Non-GST and no loan amount: "What is the loan amount required? (Please mention in Lakh or Cr)"
-F2. Ask for the SECOND missing item:
-  - GST and no loan amount: "Can you help with the loan amount? Do mention in lakh or cr."
-  - Non-GST and no revenue: "What is your annual revenue from operations? (Approximate is fine)"
-F3. If both revenue+loanAmount given but no purpose: "What is the purpose of this loan?" Set inputType:"dropdown_purpose"
-Extract: revenue, loanAmount, loanPurpose""",
+N2. Ask business entity name
+Extract: businessName
 
+N3. Ask industry (dropdown)
+Extract: industry
+
+N4. Ask line of business:
+Trading | Services | Manufacturing | Financial Services | Infra
+Extract: lineOfBusiness
+""",
+
+   "NODE_FINANCIALS": """CURRENT NODE: NODE_FINANCIALS
+
+Ask sequentially (one per turn):
+
+1. Business vintage (years)
+Extract: vintage
+
+2. Revenue from operations (latest FY)
+Extract: revenue
+
+3. Operating profit before interest, depreciation & tax
+Extract: pbid
+
+4. Total current EMI payout across loans
+Extract: monthlyObligation
+
+5. Requested loan amount
+Extract: loanAmount
+
+6. Purpose of loan
+Set inputType:"dropdown_purpose"
+Extract: loanPurpose
+""",
     "NODE_SUMMARY": """CURRENT NODE: NODE_SUMMARY - Data Confirmation ONLY
 DO NOT show any offer, pricing, interest rate, or approved amount here. This is ONLY data confirmation.
 
@@ -461,15 +509,13 @@ class SystemAnalyzer:
                 triggers.append({
                     "agent": "GSTN_AGENT",
                     "action": (
-                        "INITIALIZING MULTI-AGENT WORKFLOW\n\n"
-                        "STEP 1: Extract Trade Name, Legal Name, active GSTNs, PAN\n\n"
-                        "STEP 2: PARALLEL EXECUTION\n"
-                        "> LEGAL_AGENT: e-courts, NCLT, CIBIL suit, DRT\n"
-                        "> BEHAVIOURAL_AGENT: Internal DB lookup\n"
-                        "> EPFO_AGENT: Name-based EPFO extraction\n"
-                        "> NEWS_AGENT: Sentiment scan\n"
-                        "> RATINGS_AGENT: External rating pull"
-                    ),
+                        "Triggered GSTN ingestion\n"
+                        "> Extract PAN from GSTN\n"
+                        "> Trigger CIC bureau soft pull\n"
+                        "> Initiating adverse news scan\n"
+                        "> Running GST delayed filing model\n"
+                        "> Running EPFO compliance model"
+                                            ),
                     "status": "Data Phase 1 Complete",
                 })
             if data_extracted.get("legalNameConfirmed"):
@@ -500,11 +546,25 @@ class SystemAnalyzer:
                 })
 
         elif node == "NODE_GST_INDUSTRY":
+            if data_extracted.get("cin"):
+                triggers.append({
+                    "agent":"MCA_AGENT",
+                    "action":"Extracting management details and MCA master data.",
+                    "status":"MCA Sync"
+                })
+
             if data_extracted.get("industryConfirmed"):
                 triggers.append({
                     "agent": "SECTORAL_RISK_AGENT",
                     "action": "Confirming vintage and industry model, trigger INDUSTRY_PEER_RISK_AGENT",
                     "status": "Verification",
+                })
+
+            if data_extracted.get("lineOfBusiness"):
+                triggers.append({
+                    "agent":"PEER_MODEL",
+                    "action":"Preparing peer comparison dataset using industry + LOB.",
+                    "status":"Dataset Prepared"
                 })
 
         elif node == "NODE_NONGST_COLLECT":
