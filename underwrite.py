@@ -593,13 +593,13 @@ class NodeRouter:
                 return "NODE_GST_ENTITY"
     
             if not ud.get("udyamChecked"):
-                return "NODE_UDYAM"
+                return "NODE_GST_ENTITY"
     
             if not ud.get("industryConfirmed"):
                 return "NODE_GST_INDUSTRY"
     
             if not ud.get("legalCheckComplete"):
-                return "NODE_LEGAL"
+                return "NODE_GST_APPLICANT"
     
         # ---------- NON GST FLOW ----------
         else:
@@ -612,7 +612,7 @@ class NodeRouter:
     
         # ---------- LOAN STRUCTURING ----------
         if not ud.get("loanStructured"):
-            return "NODE_LOAN_STRUCTURING"
+            return "NODE_FINANCIALS"
     
         # ---------- PRE OFFER ----------
         if not ud.get("preOfferGenerated"):
@@ -711,71 +711,6 @@ def trim_messages(messages, max_msgs=MAX_HISTORY_MSGS):
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
-def trigger_models(node, user_data):
-    updates = {}
-    logs = []
-
-    # ───────────────── GST DISCOVERY ─────────────────
-    if node == "NODE_GST_DISCOVERY":
-        updates.update({
-            "pan": "ABCDE1234F",
-            "gstDiscoveryComplete": True
-        })
-
-        logs += [
-            ("GSTN_AGENT", "PAN extracted from GSTN"),
-            ("NEWS_MODEL", "Scanning news using legal & trade name"),
-            ("LEGAL_API_SCORE", "Legal score computation running"),
-            ("EPFO_MODEL", "EPFO filings search triggered"),
-            ("BUREAU_MODEL", "Soft bureau pull initiated"),
-        ]
-
-    # ───────────────── INDUSTRY CONFIRM ─────────────────
-    elif node == "NODE_INDUSTRY_CONFIRM":
-        updates["peerPrepared"] = True
-        updates["industryConfirmed"] = True
-
-        logs.append((
-            "PEER_ENGINE",
-            "Peer comparison dataset prepared"
-        ))
-
-    # ───────────────── FINANCIAL HEALTH ─────────────────
-    elif node == "NODE_FINANCIAL_HEALTH":
-        pbid = float(user_data.get("pbid", 20))
-        emi  = float(user_data.get("monthlyObligation", 5))
-
-        dscr = pbid / (emi * 12) if emi else 1.0
-
-        updates["dscr"] = round(dscr, 2)
-        updates["dscrComputed"] = True
-        updates["financialHealthComplete"] = True
-
-        logs.append((
-            "DSCR_ENGINE",
-            f"DSCR computed = {dscr:.2f}x"
-        ))
-
-    # ───────────────── LOAN STRUCTURING ─────────────────
-    elif node == "NODE_LOAN_STRUCTURING":
-        updates["loanStructured"] = True
-
-        logs.append((
-            "BRE_PRELIM_MODEL",
-            "Preliminary eligibility computed (70% cap)"
-        ))
-
-    # ───────────────── PRE-OFFER ─────────────────
-    elif node == "NODE_PRE_OFFER":
-        updates["preOfferGenerated"] = True
-
-        logs.append((
-            "ENSEMBLE_ENGINE",
-            "Risk ensemble recomputed"
-        ))
-
-    return updates, logs
-
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -893,7 +828,7 @@ def chat():
         
         parsed["dataExtracted"].update(simulated)
         
-        return safe_process(current_node, parsed, user_data)
+        return safe_process(current_node, parsed, user_data, persona_logs)
 
 # ═══════════════════════════════════════
 # DEMO MODEL TRIGGER ENGINE
@@ -904,7 +839,7 @@ def chat():
 # REQUEST PROCESSOR (SIMPLIFIED)
 # ═══════════════════════════════════════
 
-def process_request(current_node, parsed, user_data):
+def process_request(current_node, parsed, user_data, persona_logs):
     """
     Processes node logic and attaches system triggers
     """
@@ -943,9 +878,9 @@ def process_request(current_node, parsed, user_data):
 # ERROR HANDLING WRAPPER
 # ═══════════════════════════════════════
 
-def safe_process(current_node, parsed, user_data):
+def safe_process(current_node, parsed, user_data, persona_logs):
     try:
-        return jsonify(process_request(current_node, parsed, user_data))
+        return jsonify(process_request(current_node, parsed, user_data, persona_logs))
 
     except ValueError as e:
         logger.error(f"Parse error: {e}")
