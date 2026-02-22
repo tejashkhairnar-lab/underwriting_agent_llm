@@ -467,6 +467,76 @@ def run_persona_agents(node, persona_data, user_data):
         simulated["bounceRate"] = persona_data.get("bounceRate")
 
     return simulated
+
+# ═══════════════════════════════════════
+# DEMO MODEL TRIGGER ENGINE
+# ═══════════════════════════════════════
+
+def trigger_models(node, user_data):
+    updates = {}
+    logs = []
+
+    # ───────────────── GST DISCOVERY ─────────────────
+    if node == "NODE_GST_DISCOVERY":
+        updates.update({
+            "pan": "ABCDE1234F",
+            "gstDiscoveryComplete": True
+        })
+
+        logs += [
+            ("GSTN_AGENT", "PAN extracted from GSTN"),
+            ("NEWS_MODEL", "Scanning news using legal & trade name"),
+            ("LEGAL_API_SCORE", "Legal score computation running"),
+            ("EPFO_MODEL", "EPFO filings search triggered"),
+            ("BUREAU_MODEL", "Soft bureau pull initiated"),
+        ]
+
+    # ───────────────── INDUSTRY CONFIRM ─────────────────
+    elif node == "NODE_INDUSTRY_CONFIRM":
+        updates["peerPrepared"] = True
+        updates["industryConfirmed"] = True
+
+        logs.append((
+            "PEER_ENGINE",
+            "Peer comparison dataset prepared"
+        ))
+
+    # ───────────────── FINANCIAL HEALTH ─────────────────
+    elif node == "NODE_FINANCIAL_HEALTH":
+        pbid = float(user_data.get("pbid", 20))
+        emi  = float(user_data.get("monthlyObligation", 5))
+
+        dscr = pbid / (emi * 12) if emi else 1.0
+
+        updates["dscr"] = round(dscr, 2)
+        updates["dscrComputed"] = True
+        updates["financialHealthComplete"] = True
+
+        logs.append((
+            "DSCR_ENGINE",
+            f"DSCR computed = {dscr:.2f}x"
+        ))
+
+    # ───────────────── LOAN STRUCTURING ─────────────────
+    elif node == "NODE_LOAN_STRUCTURING":
+        updates["loanStructured"] = True
+
+        logs.append((
+            "BRE_PRELIM_MODEL",
+            "Preliminary eligibility computed (70% cap)"
+        ))
+
+    # ───────────────── PRE-OFFER ─────────────────
+    elif node == "NODE_PRE_OFFER":
+        updates["preOfferGenerated"] = True
+
+        logs.append((
+            "ENSEMBLE_ENGINE",
+            "Risk ensemble recomputed"
+        ))
+
+    return updates, logs
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  OUTPUT GUARDRAILS
 # ══════════════════════════════════════════════════════════════════════════════
