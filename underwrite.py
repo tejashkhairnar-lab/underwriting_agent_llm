@@ -706,12 +706,36 @@ def health():
         "model": MODEL
     })
 
+#IN LOCAL
+# if __name__ == "__main__":
+#     print("\n" + "=" * 60)
+#     print("  AIWA v3.0 - Knight Fintech (CORRECTED FLOW)")
+#     print("=" * 60)
+#     print(f"  Model: {MODEL}")
+#     print(f"  Port: 5000")
+#     print("=" * 60)
+#     print("  GST Flow:")
+#     print("    GSTN → Business Name → Udyam → Industry → LOB → CIN")
+#     print("    → Vintage → Revenue → Profit → EMI → Loan → Purpose")
+#     print("    → OFFER → Options → (Optional) Docs → Revised Offer")
+#     print("  Non-GST Flow:")
+#     print("    PAN → Business Name → Industry → LOB")
+#     print("    → [Same financial questions and offer flow]")
+#     print("=" * 60 + "\n")
+    
+#     app.run(debug=False, port=5000, use_reloader=False)
+
+
 if __name__ == "__main__":
+    import os
+
+    port = int(os.environ.get("PORT", 5000))
+
     print("\n" + "=" * 60)
     print("  AIWA v3.0 - Knight Fintech (CORRECTED FLOW)")
     print("=" * 60)
     print(f"  Model: {MODEL}")
-    print(f"  Port: 5000")
+    print(f"  Port: {port}")
     print("=" * 60)
     print("  GST Flow:")
     print("    GSTN → Business Name → Udyam → Industry → LOB → CIN")
@@ -721,5 +745,5 @@ if __name__ == "__main__":
     print("    PAN → Business Name → Industry → LOB")
     print("    → [Same financial questions and offer flow]")
     print("=" * 60 + "\n")
-    
-    app.run(debug=False, port=5000, use_reloader=False)
+
+    app.run(host="0.0.0.0", port=port, debug=False)
