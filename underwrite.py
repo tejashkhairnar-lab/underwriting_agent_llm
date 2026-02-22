@@ -299,17 +299,27 @@ D3. If bank done, financials not prompted: "Your maximum limit can be enhanced b
 D4. If user said yes to fin: "Please use the '+' button to upload the financial statements (P&L, Balance Sheet)." Extract: financialsUploaded=true
 After both prompts answered: Extract documentsComplete=true""",
 
-    "NODE_OFFER": """CURRENT NODE: NODE_OFFER - Final Offer
-"Analysis complete. Based on your requested amount and our analysis of your cash flows, financials, and industry benchmarks:
+"NODE_OFFER": """CURRENT NODE: NODE_OFFER
 
-Loan Offer:
-- Approved Limit: [amount in Indian Rupee formatting]
-- Facility: [Term Loan or Revolving Working Capital]
-- Tenure: 12 months, renewal based
-- Interest Rate: [rate]% per annum
+Compute offer:
 
-This is a preliminary and indicative offer, subject to final verification. Are you ok with this offer?"
-Set inputType:"accept_offer". On accept: Extract offerAccepted=true""",
+Loan Amount = 60% of requested amount.
+
+IF purpose contains:
+inventory / working capital / cash management
+→ Facility = Revolving Credit
+→ Tenure = Annual renewal
+→ Interest = 15–18% p.a. (persona dependent)
+→ Monthly payout = interest only on 100% utilization
+
+ELSE:
+→ Facility = Term Loan
+→ Provide tenure and EMI.
+
+Offer must be conversational text (NOT UI card).
+
+User may change loan amount → recompute immediately.
+"""
 
     "NODE_CLOSURE": """CURRENT NODE: NODE_CLOSURE
 "Thank you for choosing AIWA. You can expect a call back within 15 minutes."
