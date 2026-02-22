@@ -42,6 +42,7 @@ MAX_HISTORY_MSGS  = 6   # Only send last N messages to save tokens
 # DEMO PERSONAS (Synthetic Data Engine)
 # ═══════════════════════════════════════
 
+
 PERSONAS = {
 
     "growth_sme": {
@@ -128,7 +129,22 @@ NODES = {
     "NODE_OFFER":            {"phase": 7, "desc": "Final offer presentation"},
     "NODE_CLOSURE":          {"phase": 8, "desc": "RM callback + close"},
 }
+# ═══════════════════════════════════════
+# WORKFLOW PHASE FLAGS (DEMO FLOW CONTROL)
+# ═══════════════════════════════════════
 
+WORKFLOW_FLAGS = [
+    "gstDiscoveryComplete",
+    "udyamChecked",
+    "industryConfirmed",
+    "peerPrepared",
+    "legalCheckComplete",
+    "vintageConfirmed",
+    "financialHealthComplete",
+    "dscrComputed",
+    "loanStructured",
+    "preOfferGenerated"
+]
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  DYNAMIC PROMPT SYSTEM — Compact base + node-specific instructions
@@ -492,43 +508,48 @@ class NodeRouter:
 
     @staticmethod
     def determine_node(ud, msg_count):
-        if not ud.get("mobile") or not ud.get("otpVerified") or ud.get("isGSTRegistered") is None:
+    
+        # ---------- PHASE 0 : ONBOARD ----------
+        if not ud.get("mobile") or not ud.get("otpVerified") \
+           or ud.get("isGSTRegistered") is None:
             return "NODE_ONBOARD"
-
-        is_gst = ud.get("isGSTRegistered", False)
-
+    
+        is_gst = ud.get("isGSTRegistered")
+    
+        # ---------- GST FLOW ----------
         if is_gst:
-            if not ud.get("gstn") or not ud.get("legalNameConfirmed") or (not ud.get("cin") and not ud.get("cinSkipped")):
-                return "NODE_GST_ENTITY"
-            if not ud.get("applicantName") or not ud.get("din_or_role"):
-                return "NODE_GST_APPLICANT"
+    
+            if not ud.get("gstDiscoveryComplete"):
+                return "NODE_GST_DISCOVERY"
+    
+            if not ud.get("udyamChecked"):
+                return "NODE_UDYAM"
+    
             if not ud.get("industryConfirmed"):
-                return "NODE_GST_INDUSTRY"
+                return "NODE_INDUSTRY_CONFIRM"
+    
+            if not ud.get("legalCheckComplete"):
+                return "NODE_LEGAL"
+    
+        # ---------- NON GST FLOW ----------
         else:
-            if not ud.get("pan") or (not ud.get("udyam") and not ud.get("udyamSkipped")) or not ud.get("industry") or not ud.get("applicantName") or not ud.get("designation"):
+            if not ud.get("nonGSTProfileComplete"):
                 return "NODE_NONGST_COLLECT"
-
-        if not ud.get("revenue") or not ud.get("loanAmount") or not ud.get("loanPurpose"):
-            return "NODE_FINANCIALS"
-
-        if not ud.get("summaryConfirmed"):
-            return "NODE_SUMMARY"
-
-        if is_gst:
-            if not ud.get("prelimOfferShown"):
-                return "NODE_GST_PRELIM_OFFER"
-            if ud.get("wantsGSTConsent") and not ud.get("gstConsentComplete"):
-                return "NODE_GST_CONSENT"
-
-        if not ud.get("documentsComplete"):
-            return "NODE_DOCUMENTS"
-
-        if not ud.get("offerAccepted"):
-            return "NODE_OFFER"
-
+    
+        # ---------- FINANCIAL HEALTH ----------
+        if not ud.get("financialHealthComplete"):
+            return "NODE_FINANCIAL_HEALTH"
+    
+        # ---------- LOAN STRUCTURING ----------
+        if not ud.get("loanStructured"):
+            return "NODE_LOAN_STRUCTURING"
+    
+        # ---------- PRE OFFER ----------
+        if not ud.get("preOfferGenerated"):
+            return "NODE_PRE_OFFER"
+    
         return "NODE_CLOSURE"
-
-
+        
 # ══════════════════════════════════════════════════════════════════════════════
 #  INPUT GUARDRAILS — Pre-LLM checks
 # ══════════════════════════════════════════════════════════════════════════════
@@ -721,6 +742,14 @@ def chat():
         parsed["currentNode"] = current_node
         parsed = OutputGuardrail.sanitize(parsed)
 
+        # ----- DEMO MODEL EXECUTION -----
+        
+        updates, persona_logs = trigger_models(
+            current_node,
+            user_data
+        )
+        
+        parsed["dataExtracted"].update(updates)
         simulated = run_persona_agents(
             current_node,
             persona_data,
@@ -737,9 +766,89 @@ def chat():
         )
 
         parsed["dataExtracted"].update(simulated)
+# ═══════════════════════════════════════
+# DEMO MODEL TRIGGER ENGINE
+# ═══════════════════════════════════════
 
+def trigger_models(node, user_data):
+
+    updates = {}
+    logs = []
+
+    # GST discovery stage
+    if node == "NODE_GST_DISCOVERY":
+
+        updates.update({
+            "pan": "ABCDE1234F",
+            "gstDiscoveryComplete": True
+        })
+
+        logs += [
+            ("GSTN_AGENT", "PAN extracted from GSTN"),
+            ("NEWS_MODEL", "Scanning news using legal & trade name"),
+            ("LEGAL_API_SCORE", "Legal score computation running"),
+            ("EPFO_MODEL", "EPFO filings search triggered"),
+            ("BUREAU_MODEL", "Soft bureau pull initiated"),
+        ]
+
+    # Industry confirmation
+    if node == "NODE_INDUSTRY_CONFIRM":
+
+        updates["peerPrepared"] = True
+        updates["industryConfirmed"] = True
+
+        logs.append(
+            ("PEER_ENGINE",
+             "Peer comparison dataset prepared")
+        )
+
+    # Financial health → DSCR
+    if node == "NODE_FINANCIAL_HEALTH":
+
+        pbid = float(user_data.get("pbid", 20))
+        emi  = float(user_data.get("monthlyObligation", 5))
+
+        dscr = pbid / (emi * 12) if emi else 1.0
+
+        updates["dscr"] = round(dscr, 2)
+        updates["dscrComputed"] = True
+        updates["financialHealthComplete"] = True
+
+        logs.append(
+            ("DSCR_ENGINE",
+             f"DSCR computed = {dscr:.2f}x")
+        )
+
+    # Loan structuring
+    if node == "NODE_LOAN_STRUCTURING":
+
+        updates["loanStructured"] = True
+
+        logs.append(
+            ("BRE_PRELIM_MODEL",
+             "Preliminary eligibility computed (70% cap)")
+        )
+
+    # Pre-offer
+    if node == "NODE_PRE_OFFER":
+
+        updates["preOfferGenerated"] = True
+
+        logs.append(
+            ("ENSEMBLE_ENGINE",
+             "Risk ensemble recomputed")
+        )
+
+    return updates, logs
         # ── System analyzer ──
         triggers = SystemAnalyzer.analyze_and_trigger(
+        # append simulated model triggers
+            for agent, action in persona_logs:
+                triggers.append({
+                    "agent": agent,
+                    "action": action,
+                    "status": "SIMULATED"
+                })
             current_node, parsed.get("dataExtracted", {}), user_data, parsed)
         parsed["systemTriggers"] = triggers
 
