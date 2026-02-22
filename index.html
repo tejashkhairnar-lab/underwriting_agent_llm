@@ -400,6 +400,24 @@ function showIndustryDropdown() {
     document.getElementById('ui-extras').appendChild(wrap);
 }
 
+function showLOBDropdown() {
+    clearExtras();
+    const LOB_OPTIONS = ['Trading', 'Services', 'Manufacturing', 'Financial Services', 'Infrastructure'];
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;';
+    const dd = document.createElement('div');
+    dd.className = 'dropdown-menu';
+    LOB_OPTIONS.forEach(lob => {
+        const row = document.createElement('div');
+        row.className = 'dd-item';
+        row.textContent = lob;
+        row.onclick = () => { clearExtras(); handleSubmit(lob); };
+        dd.appendChild(row);
+    });
+    wrap.appendChild(dd);
+    document.getElementById('ui-extras').appendChild(wrap);
+}
+
 function showQuickActions(options) {
     clearExtras();
     const wrap = document.createElement('div');
@@ -428,7 +446,6 @@ async function callBackend(userMessage) {
 
     // Fake orchestration delay
     await new Promise(r => setTimeout(r, 400 + Math.random()*400));
-
     const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -506,14 +523,6 @@ function processResponse(r) {
     const it = r.inputType || 'text';
     state.inputType = it;
 
-    // Offer computation
-    const needsOffer = (it === 'accept_offer' || (r.message||'').toLowerCase().includes('offer')) && !state.offerShown;
-    // Offer now handled fully by backend conversationally
-    state.offerShown = true;
-        addLog(`BRE_ENGINE: Offer computed.\n> ${o.approvedAmt} @ ${o.rate}% | ${o.tenure}m | EMI ${o.emiFormatted}\n> Risk tier: ${o.risk.toUpperCase()}`, 'OFFER READY');
-        appendOfferCard(o);
-    }
-
     // Configure input
     inp().placeholder = 'Type your response…';
     inp().disabled    = false;
@@ -532,27 +541,36 @@ function processResponse(r) {
             setInput(false);
             setTimeout(showIndustryDropdown, 100);
             break;
-        case 'multi_select_gstn':
-            showQuickActions(['Select all GSTNs', 'Select primary GSTN only']);
+        case 'dropdown_lob':
+            inp().disabled = true;
+            setInput(false);
+            setTimeout(showLOBDropdown, 100);
+            break;
+        case 'offer_with_options':
+            // Show offer options based on GST status
+            const isGST = state.userData.isGSTRegistered;
+            if (isGST) {
+                showQuickActions([
+                    'Accept offer',
+                    'Upgrade max eligibility by sharing financials and BSA',
+                    'Provide GSTN consent for upgrading max eligibility'
+                ]);
+            } else {
+                showQuickActions([
+                    'Accept offer',
+                    'Upgrade max eligibility by sharing financials and BSA'
+                ]);
+            }
             break;
         case 'upload_bank':
-            inp().placeholder = "Click '+' to upload bank statements, or type to skip…";
+            inp().placeholder = "Click '+' to upload bank statements, or type to continue…";
             document.getElementById('file-input').setAttribute('data-type','bank');
             document.getElementById('upload-icon').classList.add('upload-active');
-            showQuickActions(['Skip for now']);
             break;
         case 'upload_fin':
-            inp().placeholder = "Click '+' to upload financials, or type to skip…";
+            inp().placeholder = "Click '+' to upload financials, or type to continue…";
             document.getElementById('file-input').setAttribute('data-type','fin');
             document.getElementById('upload-icon').classList.add('upload-active');
-            showQuickActions(['Skip for now']);
-            break;
-        case 'accept_offer':
-        case 'prelim_offer':
-            showQuickActions(['Yes, I accept the offer', 'I have questions', 'Request a different amount']);
-            break;
-        case 'confirm_summary':
-            showQuickActions(['Yes, all details are correct', 'I need to make a correction']);
             break;
         case 'end':
             state.done = true;
@@ -584,6 +602,15 @@ async function handleSubmit(overrideText) {
     if (/^[6-9]\d{9}$/.test(msg))                                     state.userData.mobile = msg;
     if (/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i.test(msg))    state.userData.gstn = msg.toUpperCase();
     if (/^[A-Z]{5}[0-9]{4}[A-Z]$/i.test(msg))                        state.userData.pan  = msg.toUpperCase();
+
+    // Handle offer option selections
+    if (msg === 'Accept offer') {
+        state.userData.offerAccepted = true;
+    } else if (msg === 'Upgrade max eligibility by sharing financials and BSA') {
+        state.userData.upgradeWithDocs = true;
+    } else if (msg === 'Provide GSTN consent for upgrading max eligibility') {
+        state.userData.gstConsentUpgrade = true;
+    }
 
     // Upload parsing
     if (msg.startsWith('Uploaded:')) {
