@@ -65,16 +65,17 @@
             <div style="color:#9CA3AF;font-size:9px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;">AIWA · Agentic Underwriting Orchestrator</div>
         </div>
     </div>
-    <div style="display:flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:999px;padding:4px 12px;">
-        <div id="status-dot" style="width:6px;height:6px;background:var(--cyan);border-radius:50%;animation:pulse-ring 2s infinite;"></div>
-        <span id="status-label" style="color:var(--blue);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">System Active</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+        <select id="persona-select" style="font-size:10px;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;font-weight:600;color:var(--blue);">
+            <option value="growth_sme">Growth SME</option>
+            <option value="stressed_trader">Stressed Trader</option>
+            <option value="new_age_startup">New Age Startup</option>
+        </select>
+        <div style="display:flex;align-items:center;gap:6px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:999px;padding:4px 12px;">
+            <div id="status-dot" style="width:6px;height:6px;background:var(--cyan);border-radius:50%;animation:pulse-ring 2s infinite;"></div>
+            <span id="status-label" style="color:var(--blue);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;">System Active</span>
+        </div>
     </div>
-    <select id="persona-select"
- style="font-size:10px;border:1px solid #E5E7EB;border-radius:6px;padding:4px;">
-  <option value="growth_sme">Growth SME</option>
-  <option value="stressed_trader">Stressed Trader</option>
-  <option value="new_age_startup">New Age Startup</option>
-</select>
 </header>
 
 <!-- ══════════ BODY ══════════ -->
@@ -105,7 +106,7 @@
         <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #F3F4F6;padding:10px 16px 14px;">
 
             <!-- Guardrail banner -->
-            <div id="guardrail-banner" style="display:none;margin-bottom:8px;padding:8px 12px;border-radius:8px;font-size:11.5px;display:none;align-items:center;gap:6px;"></div>
+            <div id="guardrail-banner" style="display:none;margin-bottom:8px;padding:8px 12px;border-radius:8px;font-size:11.5px;align-items:center;gap:6px;"></div>
 
             <!-- Dropdowns + Quick Actions (injected dynamically) -->
             <div id="ui-extras" style="position:relative;"></div>
@@ -119,7 +120,7 @@
                 <input type="text" id="user-input" placeholder="Type your response…"
                     style="flex:1;background:none;border:none;outline:none;font-size:13.5px;color:#374151;padding:6px 0;font-family:inherit;"
                     autocomplete="off">
-                <button id="send-btn" onclick="handleSend()" style="padding:8px 10px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;transition:opacity .2s;">
+                <button id="send-btn" onclick="handleSubmit()" style="padding:8px 10px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;transition:opacity .2s;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 </button>
             </div>
@@ -463,35 +464,28 @@ function processResponse(r) {
     
     // Always recompute underwriting (demo behaviour)
     try {
-
         const hasUnderwritingSignal =
             state.userData.industry ||
             state.userData.revenue ||
             state.userData.loanAmount ||
             state.userData.pbid ||
             state.userData.dscr;
-    
-        if (hasUnderwritingSignal) {
 
+        if (hasUnderwritingSignal) {
             const interimOffer = BRE.compute(
                 state.userData,
                 state.hasBank,
                 state.hasFin
             );
-    
-            addLog(
-`BRE_ENGINE:
-Eligibility recalculated
-> Eligible Limit: ${interimOffer.approvedAmt}
-> Indicative Rate: ${interimOffer.rate}%
-> Risk Tier: ${interimOffer.risk.toUpperCase()}`,
-            "MODEL UPDATE"
-        );
-    }
 
-} catch (e) {
-    console.warn("BRE interim compute skipped:", e);
-}
+            addLog(
+                `BRE_ENGINE:\nEligibility recalculated\n> Eligible Limit: ${interimOffer.approvedAmt}\n> Indicative Rate: ${interimOffer.rate}%\n> Risk Tier: ${interimOffer.risk.toUpperCase()}`,
+                "MODEL UPDATE"
+            );
+        }
+    } catch (e) {
+        console.warn("BRE interim compute skipped:", e);
+    }
     
     // Guardrail
     showGuardrail(r.guardrailFlag || null);
@@ -539,6 +533,9 @@ Eligibility recalculated
             setInput(false);
             setTimeout(showIndustryDropdown, 100);
             break;
+        case 'multi_select_gstn':
+            showQuickActions(['Select all GSTNs', 'Select primary GSTN only']);
+            break;
         case 'upload_bank':
             inp().placeholder = "Click '+' to upload bank statements, or type to skip…";
             document.getElementById('file-input').setAttribute('data-type','bank');
@@ -552,6 +549,7 @@ Eligibility recalculated
             showQuickActions(['Skip for now']);
             break;
         case 'accept_offer':
+        case 'prelim_offer':
             showQuickActions(['Yes, I accept the offer', 'I have questions', 'Request a different amount']);
             break;
         case 'confirm_summary':
