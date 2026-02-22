@@ -33,7 +33,7 @@ app = Flask(__name__, static_folder=".")
 CORS(app)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "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")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "you key")
 ANTHROPIC_URL     = "https://api.anthropic.com/v1/messages"
 MODEL             = "claude-sonnet-4-20250514"
 MAX_HISTORY_MSGS  = 6   # Only send last N messages to save tokens
