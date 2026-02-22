@@ -33,7 +33,7 @@ app = Flask(__name__, static_folder=".")
 CORS(app)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "you key")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "insert")
 ANTHROPIC_URL     = "https://api.anthropic.com/v1/messages"
 MODEL             = "claude-sonnet-4-20250514"
 MAX_HISTORY_MSGS  = 6   # Only send last N messages to save tokens
@@ -766,18 +766,17 @@ def chat():
         )
 
         parsed["dataExtracted"].update(simulated)
+
 # ═══════════════════════════════════════
 # DEMO MODEL TRIGGER ENGINE
 # ═══════════════════════════════════════
 
 def trigger_models(node, user_data):
-
     updates = {}
     logs = []
 
-    # GST discovery stage
+    # ───────────────── GST DISCOVERY ─────────────────
     if node == "NODE_GST_DISCOVERY":
-
         updates.update({
             "pan": "ABCDE1234F",
             "gstDiscoveryComplete": True
@@ -791,20 +790,18 @@ def trigger_models(node, user_data):
             ("BUREAU_MODEL", "Soft bureau pull initiated"),
         ]
 
-    # Industry confirmation
-    if node == "NODE_INDUSTRY_CONFIRM":
-
+    # ───────────────── INDUSTRY CONFIRM ─────────────────
+    elif node == "NODE_INDUSTRY_CONFIRM":
         updates["peerPrepared"] = True
         updates["industryConfirmed"] = True
 
-        logs.append(
-            ("PEER_ENGINE",
-             "Peer comparison dataset prepared")
-        )
+        logs.append((
+            "PEER_ENGINE",
+            "Peer comparison dataset prepared"
+        ))
 
-    # Financial health → DSCR
-    if node == "NODE_FINANCIAL_HEALTH":
-
+    # ───────────────── FINANCIAL HEALTH ─────────────────
+    elif node == "NODE_FINANCIAL_HEALTH":
         pbid = float(user_data.get("pbid", 20))
         emi  = float(user_data.get("monthlyObligation", 5))
 
@@ -814,69 +811,131 @@ def trigger_models(node, user_data):
         updates["dscrComputed"] = True
         updates["financialHealthComplete"] = True
 
-        logs.append(
-            ("DSCR_ENGINE",
-             f"DSCR computed = {dscr:.2f}x")
-        )
+        logs.append((
+            "DSCR_ENGINE",
+            f"DSCR computed = {dscr:.2f}x"
+        ))
 
-    # Loan structuring
-    if node == "NODE_LOAN_STRUCTURING":
-
+    # ───────────────── LOAN STRUCTURING ─────────────────
+    elif node == "NODE_LOAN_STRUCTURING":
         updates["loanStructured"] = True
 
-        logs.append(
-            ("BRE_PRELIM_MODEL",
-             "Preliminary eligibility computed (70% cap)")
-        )
+        logs.append((
+            "BRE_PRELIM_MODEL",
+            "Preliminary eligibility computed (70% cap)"
+        ))
 
-    # Pre-offer
-    if node == "NODE_PRE_OFFER":
-
+    # ───────────────── PRE-OFFER ─────────────────
+    elif node == "NODE_PRE_OFFER":
         updates["preOfferGenerated"] = True
 
-        logs.append(
-            ("ENSEMBLE_ENGINE",
-             "Risk ensemble recomputed")
-        )
+        logs.append((
+            "ENSEMBLE_ENGINE",
+            "Risk ensemble recomputed"
+        ))
 
     return updates, logs
-        # ── System analyzer ──
-        triggers = SystemAnalyzer.analyze_and_trigger(
-        # append simulated model triggers
-            for agent, action in persona_logs:
-                triggers.append({
-                    "agent": agent,
-                    "action": action,
-                    "status": "SIMULATED"
-                })
-            current_node, parsed.get("dataExtracted", {}), user_data, parsed)
-        parsed["systemTriggers"] = triggers
 
-        logger.info(f"OK: node={current_node} type={parsed.get('inputType')} triggers={len(triggers)}")
-        return jsonify(parsed)
+
+# ═══════════════════════════════════════
+# REQUEST PROCESSOR (SIMPLIFIED)
+# ═══════════════════════════════════════
+
+def process_request(current_node, parsed, user_data):
+    """
+    Processes node logic and attaches system triggers
+    """
+    # Run simulated model triggers
+    updates, persona_logs = trigger_models(
+        current_node,
+        parsed.get("dataExtracted", {})
+    )
+
+    # Merge updates into parsed data
+    parsed.setdefault("dataExtracted", {}).update(updates)
+
+    # Build trigger list
+    triggers = []
+
+    for agent, action in persona_logs:
+        triggers.append({
+            "agent": agent,
+            "action": action,
+            "status": "SIMULATED"
+        })
+
+    # Run system analyzer
+    system_triggers = SystemAnalyzer.analyze_and_trigger(
+        current_node,
+        parsed.get("dataExtracted", {}),
+        user_data,
+        parsed
+    )
+
+    triggers.extend(system_triggers)
+    parsed["systemTriggers"] = triggers
+
+    logger.info(
+        f"OK: node={current_node} "
+        f"type={parsed.get('inputType')} "
+        f"triggers={len(triggers)}"
+    )
+
+    return parsed
+
+
+# ═══════════════════════════════════════
+# ERROR HANDLING WRAPPER
+# ═══════════════════════════════════════
+
+def safe_process(current_node, parsed, user_data):
+    try:
+        return jsonify(process_request(current_node, parsed, user_data))
 
     except ValueError as e:
         logger.error(f"Parse error: {e}")
-        return jsonify({"message": "Processing issue. Please repeat your response.",
-                        "logEntry": f"PARSE_ERROR: {e}", "logStatus": "ERROR", "inputType": "text",
-                        "dataExtracted": {}, "guardrailFlag": None, "isSummary": False,
-                        "summaryData": None, "currentNode": "UNKNOWN", "systemTriggers": []}), 200
+        return jsonify({
+            "message": "Processing issue. Please repeat your response.",
+            "logEntry": f"PARSE_ERROR: {e}",
+            "logStatus": "ERROR",
+            "inputType": "text",
+            "dataExtracted": {},
+            "guardrailFlag": None,
+            "isSummary": False,
+            "summaryData": None,
+            "currentNode": "UNKNOWN",
+            "systemTriggers": []
+        }), 200
 
     except requests.Timeout:
-        return jsonify({"message": "Service is slow. Please try again.",
-                        "logEntry": "TIMEOUT", "logStatus": "TIMEOUT", "inputType": "text",
-                        "dataExtracted": {}, "guardrailFlag": None, "isSummary": False,
-                        "summaryData": None, "currentNode": "UNKNOWN", "systemTriggers": []}), 200
+        return jsonify({
+            "message": "Service is slow. Please try again.",
+            "logEntry": "TIMEOUT",
+            "logStatus": "TIMEOUT",
+            "inputType": "text",
+            "dataExtracted": {},
+            "guardrailFlag": None,
+            "isSummary": False,
+            "summaryData": None,
+            "currentNode": "UNKNOWN",
+            "systemTriggers": []
+        }), 200
 
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
+# ═══════════════════════════════════════
+# HEALTH & META ENDPOINTS
+# ═══════════════════════════════════════
+
 @app.route("/health")
 def health():
     return jsonify({
-        "status": "ok", "version": "2.2.0", "model": MODEL,
+        "status": "ok",
+        "version": "2.2.0",
+        "model": MODEL,
         "optimization": "Dynamic node-specific prompts + history trimming",
         "nodes": list(NODES.keys()),
         "max_history_msgs": MAX_HISTORY_MSGS,
@@ -888,6 +947,10 @@ def get_nodes():
     return jsonify(NODES)
 
 
+# ═══════════════════════════════════════
+# APP ENTRY POINT
+# ═══════════════════════════════════════
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("  AIWA v2.2 - Knight Fintech (Token-Optimized)")
@@ -898,9 +961,12 @@ if __name__ == "__main__":
     print(f"  Prompt:    Dynamic (base ~600tok + node ~150tok)")
     print(f"  Local:     http://localhost:5000")
     print("=" * 60)
-    print("  GST:     Greet>Mobile>OTP>GSTN>Name>CIN>Applicant>DIN>Industry")
-    print("           >Revenue>Loan>Purpose>Summary>PrelimOffer>Consent>Docs>Offer>Close")
-    print("  Non-GST: Greet>Mobile>OTP>PAN>Udyam>Industry>ApplicantName>Designation")
-    print("           >Loan>Revenue>Purpose>Summary>Docs>Offer>Close")
+    print("  GST Flow:")
+    print("    Greet>Mobile>OTP>GSTN>Name>CIN>Applicant>DIN>Industry")
+    print("    >Revenue>Loan>Purpose>Summary>PrelimOffer>Consent>Docs>Offer>Close")
+    print("  Non-GST Flow:")
+    print("    Greet>Mobile>OTP>PAN>Udyam>Industry>ApplicantName>Designation")
+    print("    >Loan>Revenue>Purpose>Summary>Docs>Offer>Close")
     print("=" * 60 + "\n")
+
     app.run(debug=True, port=5000)
