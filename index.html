@@ -508,9 +508,8 @@ function processResponse(r) {
 
     // Offer computation
     const needsOffer = (it === 'accept_offer' || (r.message||'').toLowerCase().includes('offer')) && !state.offerShown;
-    if (needsOffer) {
-        const o = BRE.compute(state.userData, state.hasBank, state.hasFin);
-        state.offerShown = true;
+    // Offer now handled fully by backend conversationally
+    state.offerShown = true;
         addLog(`BRE_ENGINE: Offer computed.\n> ${o.approvedAmt} @ ${o.rate}% | ${o.tenure}m | EMI ${o.emiFormatted}\n> Risk tier: ${o.risk.toUpperCase()}`, 'OFFER READY');
         appendOfferCard(o);
     }
