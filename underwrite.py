@@ -590,13 +590,13 @@ class NodeRouter:
         if is_gst:
     
             if not ud.get("gstDiscoveryComplete"):
-                return "NODE_GST_DISCOVERY"
+                return "NODE_GST_ENTITY"
     
             if not ud.get("udyamChecked"):
                 return "NODE_UDYAM"
     
             if not ud.get("industryConfirmed"):
-                return "NODE_INDUSTRY_CONFIRM"
+                return "NODE_GST_INDUSTRY"
     
             if not ud.get("legalCheckComplete"):
                 return "NODE_LEGAL"
@@ -608,7 +608,7 @@ class NodeRouter:
     
         # ---------- FINANCIAL HEALTH ----------
         if not ud.get("financialHealthComplete"):
-            return "NODE_FINANCIAL_HEALTH"
+            return "NODE_FINANCIALS"
     
         # ---------- LOAN STRUCTURING ----------
         if not ud.get("loanStructured"):
@@ -616,7 +616,7 @@ class NodeRouter:
     
         # ---------- PRE OFFER ----------
         if not ud.get("preOfferGenerated"):
-            return "NODE_PRE_OFFER"
+            return "NODE_GST_PRELIM_OFFER"
     
         return "NODE_CLOSURE"
         
@@ -711,6 +711,71 @@ def trim_messages(messages, max_msgs=MAX_HISTORY_MSGS):
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
+def trigger_models(node, user_data):
+    updates = {}
+    logs = []
+
+    # ───────────────── GST DISCOVERY ─────────────────
+    if node == "NODE_GST_DISCOVERY":
+        updates.update({
+            "pan": "ABCDE1234F",
+            "gstDiscoveryComplete": True
+        })
+
+        logs += [
+            ("GSTN_AGENT", "PAN extracted from GSTN"),
+            ("NEWS_MODEL", "Scanning news using legal & trade name"),
+            ("LEGAL_API_SCORE", "Legal score computation running"),
+            ("EPFO_MODEL", "EPFO filings search triggered"),
+            ("BUREAU_MODEL", "Soft bureau pull initiated"),
+        ]
+
+    # ───────────────── INDUSTRY CONFIRM ─────────────────
+    elif node == "NODE_INDUSTRY_CONFIRM":
+        updates["peerPrepared"] = True
+        updates["industryConfirmed"] = True
+
+        logs.append((
+            "PEER_ENGINE",
+            "Peer comparison dataset prepared"
+        ))
+
+    # ───────────────── FINANCIAL HEALTH ─────────────────
+    elif node == "NODE_FINANCIAL_HEALTH":
+        pbid = float(user_data.get("pbid", 20))
+        emi  = float(user_data.get("monthlyObligation", 5))
+
+        dscr = pbid / (emi * 12) if emi else 1.0
+
+        updates["dscr"] = round(dscr, 2)
+        updates["dscrComputed"] = True
+        updates["financialHealthComplete"] = True
+
+        logs.append((
+            "DSCR_ENGINE",
+            f"DSCR computed = {dscr:.2f}x"
+        ))
+
+    # ───────────────── LOAN STRUCTURING ─────────────────
+    elif node == "NODE_LOAN_STRUCTURING":
+        updates["loanStructured"] = True
+
+        logs.append((
+            "BRE_PRELIM_MODEL",
+            "Preliminary eligibility computed (70% cap)"
+        ))
+
+    # ───────────────── PRE-OFFER ─────────────────
+    elif node == "NODE_PRE_OFFER":
+        updates["preOfferGenerated"] = True
+
+        logs.append((
+            "ENSEMBLE_ENGINE",
+            "Risk ensemble recomputed"
+        ))
+
+    return updates, logs
+
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
@@ -825,86 +890,14 @@ def chat():
             persona_data,
             user_data
         )
-        # Merge simulated agent outputs into extracted data
-        parsed.setdefault("dataExtracted", {})
+        
         parsed["dataExtracted"].update(simulated)
         
-        simulated = run_persona_agents(
-            current_node,
-            persona_data,
-            user_data
-        )
-
-        parsed["dataExtracted"].update(simulated)
+        return safe_process(current_node, parsed, user_data)
 
 # ═══════════════════════════════════════
 # DEMO MODEL TRIGGER ENGINE
 # ═══════════════════════════════════════
-
-def trigger_models(node, user_data):
-    updates = {}
-    logs = []
-
-    # ───────────────── GST DISCOVERY ─────────────────
-    if node == "NODE_GST_DISCOVERY":
-        updates.update({
-            "pan": "ABCDE1234F",
-            "gstDiscoveryComplete": True
-        })
-
-        logs += [
-            ("GSTN_AGENT", "PAN extracted from GSTN"),
-            ("NEWS_MODEL", "Scanning news using legal & trade name"),
-            ("LEGAL_API_SCORE", "Legal score computation running"),
-            ("EPFO_MODEL", "EPFO filings search triggered"),
-            ("BUREAU_MODEL", "Soft bureau pull initiated"),
-        ]
-
-    # ───────────────── INDUSTRY CONFIRM ─────────────────
-    elif node == "NODE_INDUSTRY_CONFIRM":
-        updates["peerPrepared"] = True
-        updates["industryConfirmed"] = True
-
-        logs.append((
-            "PEER_ENGINE",
-            "Peer comparison dataset prepared"
-        ))
-
-    # ───────────────── FINANCIAL HEALTH ─────────────────
-    elif node == "NODE_FINANCIAL_HEALTH":
-        pbid = float(user_data.get("pbid", 20))
-        emi  = float(user_data.get("monthlyObligation", 5))
-
-        dscr = pbid / (emi * 12) if emi else 1.0
-
-        updates["dscr"] = round(dscr, 2)
-        updates["dscrComputed"] = True
-        updates["financialHealthComplete"] = True
-
-        logs.append((
-            "DSCR_ENGINE",
-            f"DSCR computed = {dscr:.2f}x"
-        ))
-
-    # ───────────────── LOAN STRUCTURING ─────────────────
-    elif node == "NODE_LOAN_STRUCTURING":
-        updates["loanStructured"] = True
-
-        logs.append((
-            "BRE_PRELIM_MODEL",
-            "Preliminary eligibility computed (70% cap)"
-        ))
-
-    # ───────────────── PRE-OFFER ─────────────────
-    elif node == "NODE_PRE_OFFER":
-        updates["preOfferGenerated"] = True
-
-        logs.append((
-            "ENSEMBLE_ENGINE",
-            "Risk ensemble recomputed"
-        ))
-
-    return updates, logs
 
 
 # ═══════════════════════════════════════
@@ -915,15 +908,7 @@ def process_request(current_node, parsed, user_data):
     """
     Processes node logic and attaches system triggers
     """
-    # Run simulated model triggers
-    updates, persona_logs = trigger_models(
-        current_node,
-        parsed.get("dataExtracted", {})
-    )
-
-    # Merge updates into parsed data
-    parsed.setdefault("dataExtracted", {}).update(updates)
-
+    
     # Build trigger list
     triggers = []
 
