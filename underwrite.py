@@ -292,36 +292,63 @@ C2. If started but no GSTNs selected: "We have found active GSTNs for this entit
 C3. If GSTNs selected but no username: "Please enter the username for [first GSTN]." Extract: gstUsername
 C4. If username given: "We have sent an OTP on the mobile registered with this GSTIN." Extract: gstOtpVerified=true, gstConsentComplete=true""",
 
-    "NODE_DOCUMENTS": """CURRENT NODE: NODE_DOCUMENTS
-D1. If bank stmt not prompted: "Great. While I assess your business on the aforementioned data, would you like to share your last 12 months bank statements from primary bank?" Set inputType:"upload_bank"
-D2. If user said yes to bank: "Please use the '+' button to upload your last 12 months Bank Statement (e-PDF)." Wait for upload. Extract: bankStatementUploaded=true
-D3. If bank done, financials not prompted: "Your maximum limit can be enhanced by uploading financial performance data. Would you like to upload your latest CA-certified financials?" Set inputType:"upload_fin"
-D4. If user said yes to fin: "Please use the '+' button to upload the financial statements (P&L, Balance Sheet)." Extract: financialsUploaded=true
-After both prompts answered: Extract documentsComplete=true""",
+ "NODE_DOCUMENTS": """CURRENT NODE: NODE_DOCUMENTS
 
+If user selects upgrade via documents:
+
+Ask:
+"Please upload last 12 months bank statements from your primary account."
+
+Set inputType:"upload_bank"
+
+After upload:
+"Please upload CA-certified financial statements for latest financial year."
+
+Set inputType:"upload_fin"
+
+After both uploads:
+
+Respond:
+"Documents received. Processing financial models and sending output for internal credit review."
+
+Extract:
+bankStatementUploaded=true
+financialsUploaded=true
+documentsComplete=true
+""",
 "NODE_OFFER": """CURRENT NODE: NODE_OFFER
 
-Compute offer:
+You are presenting a conversational loan offer.
 
-Loan Amount = 60% of requested amount.
+RULES:
 
-IF purpose contains:
-inventory / working capital / cash management
-→ Facility = Revolving Credit
-→ Tenure = Annual renewal
-→ Interest = 15–18% p.a. (persona dependent)
-→ Monthly payout = interest only on 100% utilization
+1. Approved loan amount = 60% of requested loan amount.
+2. If loanPurpose contains:
+   - inventory
+   - working capital
+   - cash flow
+   → Facility = Revolving Credit
+   → Tenure = Annual (renewal based)
+   → Interest rate between 15–18% p.a. (persona dependent)
+   → Monthly payout = interest outflow on full utilisation.
 
-ELSE:
-→ Facility = Term Loan
-→ Provide tenure and EMI.
+3. Otherwise:
+   → Facility = Term Loan
+   → Provide tenure and EMI.
 
-Offer must be conversational text (NOT UI card).
+4. Present offer ONLY as conversational text.
+5. Do NOT use UI formatting or cards.
 
-User may change loan amount → recompute immediately.
-"""
+End message with options:
 
-    "NODE_CLOSURE": """CURRENT NODE: NODE_CLOSURE
+1. Accept offer
+2. Upgrade max eligibility by sharing financials and BSA
+3. Provide GST consent for upgrading max eligibility (GST users only)
+
+Set inputType:"accept_offer"
+Extract: offerPresented=true
+""",
+"NODE_CLOSURE": """CURRENT NODE: NODE_CLOSURE
 "Thank you for choosing AIWA. You can expect a call back within 15 minutes."
 Set inputType:"end" """,
 }
@@ -764,47 +791,102 @@ def run_persona_agents(node, persona_data, user_data):
 
 def trigger_models(node, user_data):
     """
-    Triggers simulated model computations at each node.
-    Returns (data_updates, log_entries).
+    Simulated BRE + model orchestration.
+    Runs AFTER every user reply.
+    Returns:
+        updates -> data injected into underwriting state
+        logs    -> system analyzer execution logs
     """
+
     updates = {}
     logs = []
 
-    # ── GST Discovery ──
-    if node == "NODE_GST_ENTITY":
+    # ─────────────────────────────
+    # GST DISCOVERY (GSTN entered)
+    # ─────────────────────────────
+    if node == "NODE_GST_ENTITY" and user_data.get("gstn"):
+
         updates["pan"] = "ABCDE1234F"
         updates["gstDiscoveryComplete"] = True
+
         logs += [
-            ("GSTN_AGENT", "PAN extracted from GSTN"),
-            ("NEWS_MODEL", "Scanning news using legal & trade name"),
-            ("LEGAL_API_SCORE", "Legal score computation running"),
-            ("EPFO_MODEL", "EPFO filings search triggered"),
-            ("BUREAU_MODEL", "Soft bureau pull initiated"),
+            ("GSTN_AGENT", "GSTN ingested. Extracting PAN and legal identifiers"),
+            ("BUREAU_AGENT", "Triggered CIC bureau soft pull via PAN"),
+            ("NEWS_MODEL", "Checking adverse media & legal actions"),
+            ("GST_DELAY_MODEL", "Evaluating GST filing behaviour"),
+            ("EPFO_MODEL", "EPFO compliance scan initiated"),
         ]
 
-    # ── Industry Confirm ──
+    # ─────────────────────────────
+    # INDUSTRY + LOB CONFIRMATION
+    # ─────────────────────────────
     elif node == "NODE_GST_INDUSTRY":
-        updates["peerPrepared"] = True
-        updates["industryConfirmed"] = True
-        logs.append(("PEER_ENGINE", "Peer comparison dataset prepared"))
 
-    # ── Financial Health + Loan Structuring ──
-    elif node == "NODE_FINANCIALS":
+        if user_data.get("industry") and user_data.get("lineOfBusiness"):
+            updates["peerPrepared"] = True
+            updates["industryConfirmed"] = True
+
+            logs.append((
+                "PEER_MODEL",
+                "Preparing peer comparison dataset using industry + LOB."
+            ))
+
+    # ─────────────────────────────
+    # CIN PROVIDED → MCA EXTRACTION
+    # ─────────────────────────────
+    if user_data.get("cin"):
+        logs.append((
+            "MCA_AGENT",
+            "Extracting management details and MCA master data."
+        ))
+
+    # ─────────────────────────────
+    # FINANCIAL UNDERWRITING SIGNALS
+    # ─────────────────────────────
+    if node == "NODE_FINANCIALS":
+
         pbid = float(user_data.get("pbid", 20))
-        emi = float(user_data.get("monthlyObligation", 5))
+        emi  = float(user_data.get("monthlyObligation", 5))
+
         dscr = pbid / (emi * 12) if emi else 1.0
 
         updates["dscr"] = round(dscr, 2)
         updates["dscrComputed"] = True
         updates["financialHealthComplete"] = True
-        updates["loanStructured"] = True  # FIX: was in unreachable duplicate branch
-        logs.append(("DSCR_ENGINE", f"DSCR computed = {dscr:.2f}x"))
-        logs.append(("BRE_PRELIM_MODEL", "Preliminary eligibility computed (70% cap)"))
+        updates["loanStructured"] = True
 
-    # ── Pre-Offer ──
-    elif node == "NODE_GST_PRELIM_OFFER":
+        logs += [
+            ("DSCR_ENGINE", f"DSCR computed = {dscr:.2f}x"),
+            ("BRE_ENGINE", "Eligibility recomputed using financial inputs"),
+        ]
+
+    # ─────────────────────────────
+    # PRELIM OFFER CREATION
+    # ─────────────────────────────
+    if node == "NODE_GST_PRELIM_OFFER":
         updates["preOfferGenerated"] = True
-        logs.append(("ENSEMBLE_ENGINE", "Risk ensemble recomputed"))
+        logs.append((
+            "ENSEMBLE_ENGINE",
+            "Composite risk ensemble recomputed."
+        ))
+
+    # ─────────────────────────────
+    # DOCUMENT UPGRADE FLOW (PART F)
+    # ─────────────────────────────
+    if node == "NODE_DOCUMENTS":
+
+        updates["enhancedEligibility"] = True
+
+        try:
+            req = float(user_data.get("loanAmount", 0))
+            updates["loanAmount"] = round(req * 1.15, 2)
+        except:
+            pass
+
+        logs.append((
+            "ENHANCEMENT_ENGINE",
+            "Eligibility upgraded by 15% post document analysis."
+        ))
 
     return updates, logs
 
