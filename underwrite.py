@@ -55,6 +55,9 @@ ANTHROPIC_URL     = "https://api.anthropic.com/v1/messages"
 MODEL             = "claude-sonnet-4-20250514"
 MAX_HISTORY_MSGS  = 6
 
+# OTP CONFIG (MSG91)
+MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY")
+MSG91_TEMPLATE_ID = os.getenv("MSG91_TEMPLATE_ID")
 # Stop app if key missing
 if not ANTHROPIC_API_KEY:
     raise ValueError("❌ ANTHROPIC_API_KEY not found. Add it to your .env file.")
@@ -776,6 +779,47 @@ class NodeRouter:
         # Closure
         return "NODE_CLOSURE"
 
+# ═══════════════════════════════════════════════
+# OTP SERVICE (MSG91)
+# ═══════════════════════════════════════════════
+
+def send_otp(mobile):
+    try:
+        url = "https://control.msg91.com/api/v5/otp"
+
+        payload = {
+            "template_id": MSG91_TEMPLATE_ID,
+            "mobile": f"91{mobile}",
+            "authkey": MSG91_AUTH_KEY
+        }
+
+        r = requests.post(url, json=payload, timeout=10)
+        return r.status_code == 200
+
+    except Exception as e:
+        logger.error(f"OTP Send Failed: {e}")
+        return False
+
+
+def verify_otp(mobile, otp):
+    try:
+        url = "https://control.msg91.com/api/v5/otp/verify"
+
+        payload = {
+            "mobile": f"91{mobile}",
+            "otp": otp,
+            "authkey": MSG91_AUTH_KEY
+        }
+
+        r = requests.post(url, json=payload, timeout=10)
+        data = r.json()
+
+        return data.get("type") == "success"
+
+    except Exception as e:
+        logger.error(f"OTP Verify Failed: {e}")
+        return False
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  GSTN LIST GENERATOR (for demo)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1198,9 +1242,57 @@ def chat():
             parsed["guardrailFlag"] = None
         if "currentNode" not in parsed:
             parsed["currentNode"] = current_node
+
+        # =====================================================
+        # OTP AUTHENTICATION INTERCEPT (MSG91)
+        # =====================================================
         
-        # Update user_data with extracted data
-        user_data.update(parsed["dataExtracted"])
+        data_extracted = parsed.get("dataExtracted", {})
+        
+        # ---- SEND OTP WHEN MOBILE ENTERED ----
+        if "mobile" in data_extracted:
+        
+            mobile = data_extracted["mobile"]
+        
+            if not MOBILE_REGEX.match(mobile):
+                return jsonify({
+                    "message": "Please enter a valid mobile number.",
+                    "guardrailFlag": {"type": "warn", "message": "Invalid mobile number"},
+                    "inputType": "text"
+                })
+        
+            otp_sent = send_otp(mobile)
+        
+            if not otp_sent:
+                return jsonify({
+                    "message": "Unable to send OTP right now. Please try again.",
+                    "guardrailFlag": {"type": "block", "message": "OTP service unavailable"},
+                    "inputType": "text"
+                })
+        
+            logger.info(f"OTP sent to {mobile}")
+        
+        
+        # ---- VERIFY OTP BEFORE ACCEPTING ----
+        if "otpVerified" in data_extracted:
+        
+            otp_input = messages[-1]["content"].strip()
+            mobile = user_data.get("mobile")
+        
+            if not verify_otp(mobile, otp_input):
+        
+                return jsonify({
+                    "message": "Incorrect OTP. Please enter the correct OTP.",
+                    "guardrailFlag": {"type": "warn", "message": "OTP verification failed"},
+                    "inputType": "text"
+                })
+        
+            logger.info("OTP verified successfully")
+            user_data["authLevel"] = "mobile_verified"
+        
+        
+        # ---- SAFE UPDATE AFTER VALIDATION ----
+        user_data.update(data_extracted)
         
         # VALIDATION: Prevent skipping steps
         # Check if LLM tried to extract data out of sequence
