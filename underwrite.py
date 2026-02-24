@@ -787,19 +787,24 @@ def send_otp(mobile):
     try:
         url = "https://api.msg91.com/api/v5/otp"
 
+        mobile = mobile[-10:]  # ensure 10 digits
+
         headers = {
+            "authkey": MSG91_AUTH_KEY,
             "Content-Type": "application/json"
         }
 
         payload = {
             "mobile": f"91{mobile}",
-            "template_id": MSG91_TEMPLATE_ID,
-            "authkey": MSG91_AUTH_KEY
+            "template_id": MSG91_TEMPLATE_ID
         }
 
-        r = requests.post(url, json=payload, headers=headers)
+        r = requests.post(url, headers=headers, json=payload)
 
-        print("MSG91 RESPONSE:", r.text)
+        print("\n==== MSG91 SEND OTP ====")
+        print("STATUS:", r.status_code)
+        print("RESPONSE:", r.text)
+        print("========================\n")
 
         return r.status_code == 200
 
@@ -809,23 +814,33 @@ def send_otp(mobile):
 
 def verify_otp(mobile, otp):
     try:
-        url = "https://control.msg91.com/api/v5/otp/verify"
+        url = "https://api.msg91.com/api/v5/otp/verify"
+
+        mobile = mobile[-10:]
+
+        headers = {
+            "authkey": MSG91_AUTH_KEY,
+            "Content-Type": "application/json"
+        }
 
         payload = {
             "mobile": f"91{mobile}",
-            "otp": otp,
-            "authkey": MSG91_AUTH_KEY
+            "otp": otp
         }
 
-        r = requests.post(url, json=payload, timeout=10)
-        data = r.json()
+        r = requests.post(url, headers=headers, json=payload)
 
+        print("\n==== MSG91 VERIFY OTP ====")
+        print("STATUS:", r.status_code)
+        print("RESPONSE:", r.text)
+        print("==========================\n")
+
+        data = r.json()
         return data.get("type") == "success"
 
     except Exception as e:
         logger.error(f"OTP Verify Failed: {e}")
         return False
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  GSTN LIST GENERATOR (for demo)
 # ══════════════════════════════════════════════════════════════════════════════
