@@ -785,21 +785,27 @@ class NodeRouter:
 
 def send_otp(mobile):
     try:
-        url = "https://control.msg91.com/api/v5/otp"
+        url = "https://api.msg91.com/api/v5/otp"
+
+        headers = {
+            "Content-Type": "application/json"
+        }
 
         payload = {
-            "template_id": MSG91_TEMPLATE_ID,
             "mobile": f"91{mobile}",
+            "template_id": MSG91_TEMPLATE_ID,
             "authkey": MSG91_AUTH_KEY
         }
 
-        r = requests.post(url, json=payload, timeout=10)
+        r = requests.post(url, json=payload, headers=headers)
+
+        print("MSG91 RESPONSE:", r.text)
+
         return r.status_code == 200
 
     except Exception as e:
         logger.error(f"OTP Send Failed: {e}")
         return False
-
 
 def verify_otp(mobile, otp):
     try:
